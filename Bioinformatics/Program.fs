@@ -2,13 +2,6 @@
 
 [<EntryPoint>]                    
 let main argv = 
-//    let getNext = getNextCell 10 10
-//    let mutable next = getNext (0, 0)
-//    let mutable n = 1
-//    while next <> None && n < 100 do
-//        printfn "%A" next
-//        next <- getNext (Option.get next)
-//        n <- n+1
 
     let p : NWParams = 
         {

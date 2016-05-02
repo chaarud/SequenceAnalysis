@@ -47,6 +47,10 @@ let getNextCell m n = function
                 if i+j+1-n <= m then Some (i+j+1-n, n) else Some (m, n)
 
 let NeedlemanWunsch (p : NWParams) s1 s2 = 
+
+    // TODO we shouldn't have to index into l1.[i-1] because the lists are 0-indexed and the DP table is effectively 1-indexed.
+    // one possible solution is to include a xChar and yChar string in the NWCell record.
+
     let s = p.s
     let d = p.d
 
@@ -91,6 +95,7 @@ let NeedlemanWunsch (p : NWParams) s1 s2 =
                 | Some (k, l) when (k, l) = (i-1, j-1) -> 
                     (Character l1.[i-1], Character l2.[j-1])
                 | _ ->
+                    // TODO get rid of these (Gap, Gap) pairs
                     (Gap, Gap)
             traceback table (currentPairAlignment :: alignment) cell.ancestor
         | None ->

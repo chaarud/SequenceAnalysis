@@ -21,8 +21,8 @@ let UPGMA (d : IDistance<Cluster>) (seqs : Sequence list) : Tree<Sequence> =
             let c1, c2, d = closestClusters.elem1, closestClusters.elem2, closestClusters.dist
             let left = Map.find c1 map
             let right = Map.find c2 map
-            let newTree = Node (left, right, d/2.) 
             let newCluster = Set.union c1 c2
+            let newTree = Node (left, right, d/2.) 
 
             map
             |> Map.add newCluster newTree
@@ -30,13 +30,13 @@ let UPGMA (d : IDistance<Cluster>) (seqs : Sequence list) : Tree<Sequence> =
             |> Map.remove c2
             |> loop
             
-    let clusters : Cluster list = List.map Set.singleton seqs
+    let clusters = List.map Set.singleton seqs
     let trees = List.map Leaf seqs
     List.zip clusters trees
     |> Map.ofList
     |> loop
 
-let NeighborJoining (d : IDistance<Tree<_>>) (D : IDistance<Tree<_>>) (seqs : Sequence list) = 
+let NeighborJoining (d : IDistance<Tree<_>>) (D : IDistance<Tree<_>>) (seqs : Sequence list) =
 
     let rec loop map trees = 
         match Set.toList trees with
