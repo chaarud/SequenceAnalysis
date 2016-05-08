@@ -1,5 +1,0 @@
-/Users/chaaru.dingankar/Projects/Bioinformatics/Bioinformatics/obj/x86/Debug/.NETFramework,Version=v4.0.AssemblyAttribute.fs
-/Users/chaaru.dingankar/Projects/Bioinformatics/Bioinformatics/bin/Debug/Bioinformatics.exe.mdb
-/Users/chaaru.dingankar/Projects/Bioinformatics/Bioinformatics/bin/Debug/Bioinformatics.exe
-/Users/chaaru.dingankar/Projects/Bioinformatics/Bioinformatics/obj/x86/Debug/Bioinformatics.exe
-/Users/chaaru.dingankar/Projects/Bioinformatics/Bioinformatics/obj/x86/Debug/Bioinformatics.exe.mdb
