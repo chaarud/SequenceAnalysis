@@ -12,14 +12,18 @@ type CFG<'T, 'NT> = 'NT * ContextFreeRules<'T, 'NT>
 
 module List = 
 
-    let getRandom (xs : _ list) = 
-        let rnd = System.Random()  
-        List.item (rnd.Next (xs.Length)) xs
+    let randomItem xs = 
+        let rnd = System.Random ()  
+        List.item (rnd.Next (List.length xs)) xs
 
     let splitWith predicate xs =
         (List.takeWhile predicate xs, List.skipWhile predicate xs)
 
 type Decision = Accept | Reject
+
+// TODO: test edge cases
+// TODO: lots of hard to understand List.rev stuff, might introduce bugs.
+// TODO: Move out matcher and predictor functions (mutually recursive with handleNextSymbol)
 
 // Top-down parsing
 let parse (start, rules) input = 
@@ -34,8 +38,9 @@ let parse (start, rules) input =
             | Nonterminal nt -> 
                 let productions = 
                     rules
-                    |> List.filter (fst>>((=) nt)) 
+                    |> List.filter (fst >> ((=) nt)) 
                     |> List.map snd
+                    // this List.rev is hard to reason about
                     |> List.map List.rev
 
                 let listifiedStack = stack.ToArray() |> Array.toList
@@ -55,6 +60,7 @@ let parse (start, rules) input =
                             let remainingList = remainingList|> List.skipWhile matchNonterminal
                             loop (window :: acc) remainingList
                     let windows = loop [] production
+                    // this List.rev is just because we're doing window :: acc, if we appended each window we wouldn't need this.
                     List.rev windows
                         
                 let startsWith prefix xs = 
@@ -76,8 +82,7 @@ let parse (start, rules) input =
                     // so they all have the same nonterminal on the RHS of the rule
                     let rec loop input windows = 
                         match windows with
-                        | [] ->
-                            true
+                        | [] -> true
                         | thisWindow :: remainingWindows ->
                             let newInput = matchWindow input thisWindow
                             match newInput with
@@ -119,7 +124,7 @@ let produceRandom ((start, rules) : CFG<_, _>) =
     let getRandomProduction nonterminal rules =
         rules
         |> List.filter (fst >> ((=) nonterminal))
-        |> List.getRandom
+        |> List.randomItem
         |> snd
 
     let rec loop l = 

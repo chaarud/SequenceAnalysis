@@ -8,7 +8,7 @@ type Symbol =
     | Gap
     | Character of char
  
-type NWCell = 
+type DPCell = 
     {
         score : int
         ancestor : (int*int) option
@@ -27,7 +27,7 @@ type AlignmentParams =
     }
        
 let createTable m n = 
-    Array2D.zeroCreate<NWCell> (m+1) (n+1)
+    Array2D.zeroCreate<DPCell> (m+1) (n+1)
             
 let eligibleDirections = function
     | (0, 0) -> Nothing
@@ -49,7 +49,7 @@ let getNextCell m n = function
 let getScore map (l1 : _ list) (l2 : _ list) i j = Map.find (l1.[i-1], l2.[j-1]) map
 let getChar (l : _ list) i = l.[i-1]
 
-let rec traceback l1 l2 (table : NWCell [,]) (alignment : (Symbol*Symbol) list) = function
+let rec traceback l1 l2 (table : DPCell [,]) (alignment : (Symbol*Symbol) list) = function
     | Some (i, j) ->
         let cell = table.[i, j]
         let currentPairAlignment = 
@@ -68,95 +68,86 @@ let rec traceback l1 l2 (table : NWCell [,]) (alignment : (Symbol*Symbol) list) 
     | None ->
         List.tail alignment
 
+// TODO: reduce the parameter passing mess to the helper functions
+// TODO: any better way to refactor this?
+//       should we further refactor this? (eg, pull out an "aligner" function
+
+let rec fillTable m n scorer (table : DPCell [,]) = function
+    | Some (i, j) ->
+        let newCell = scorer table (i, j)
+        table.[i, j] <- newCell
+        fillTable m n scorer table (getNextCell m n (i, j))
+    | None ->
+        table
+
+let needlemanWunschScorer getScore gapPenalty (table : DPCell [,]) (i, j) = 
+    match eligibleDirections (i, j) with
+    | Nothing ->
+        {score = 0; ancestor = None}
+    | H ->
+        {score = table.[i-1, j].score - gapPenalty; ancestor = Some (i-1, j)}
+    | V -> 
+        {score = table.[i, j-1].score - gapPenalty; ancestor = Some (i, j-1)}
+    | HVD ->
+        let dScore = table.[i-1, j-1].score + (getScore i j)
+        let diagonal = {score = dScore; ancestor = Some (i-1, j-1)}
+        let hScore = table.[i-1, j].score - gapPenalty
+        let horizontal = {score = hScore; ancestor = Some (i-1, j)}
+        let vScore = table.[i, j-1].score - gapPenalty
+        let vertical = {score = vScore; ancestor = Some (i, j-1)}
+        List.maxBy (fun dpcell -> dpcell.score) [diagonal; horizontal; vertical]
+
 let NeedlemanWunsch (p : AlignmentParams) s1 s2 = 
-
-    // TODO we shouldn't have to index into l1.[i-1] because the lists are 0-indexed and the DP table is effectively 1-indexed.
-    // one possible solution is to include a xChar and yChar string in the NWCell record.
-
-    let s = p.s
-    let d = p.d
-
     let l1 = String.toList s1
     let l2 = String.toList s2
 
     let m = List.length l1
     let n = List.length l2
 
-    let getScore = getScore s l1 l2
-
-    let rec fillTable (table : NWCell [,]) = function
-        | Some (i, j) ->
-            let newCell = 
-                match eligibleDirections (i, j) with
-                | Nothing ->
-                    {score = 0; ancestor = None}
-                | H ->
-                    {score = table.[i-1, j].score - d; ancestor = Some (i-1, j)}
-                | V -> 
-                    {score = table.[i, j-1].score - d; ancestor = Some (i, j-1)}
-                | HVD ->
-                    let dScore = table.[i-1, j-1].score + (getScore i j)
-                    let diagonal = {score = dScore; ancestor = Some (i-1, j-1)}
-                    let hScore = table.[i-1, j].score - d
-                    let horizontal = {score = hScore; ancestor = Some (i-1, j)}
-                    let vScore = table.[i, j-1].score - d
-                    let vertical = {score = vScore; ancestor = Some (i, j-1)}
-                    List.maxBy (fun nwcell -> nwcell.score) [diagonal; horizontal; vertical]
-            table.[i, j] <- newCell
-            fillTable table (getNextCell m n (i, j))
-        | None ->
-            table
-
     let table = createTable m n
     let startCell = Some (0, 0)
-    let dptable = fillTable table startCell
+
+    let gapPenalty = p.d
+    let mutationScore = getScore p.s l1 l2
+    let scorer = needlemanWunschScorer mutationScore gapPenalty
+
+    let dptable = fillTable m n scorer table startCell
 
     let tracebackStart = Some (m, n)
     traceback l1 l2 table [] tracebackStart
 
+let smithWatermanScorer getScore gapPenalty (table : DPCell [,]) (i, j) = 
+    match eligibleDirections (i, j) with
+    | Nothing | H | V ->
+        {score = 0; ancestor = None}
+    | HVD ->
+        let dScore = table.[i-1, j-1].score + (getScore i j)
+        let diagonal = {score = dScore; ancestor = Some (i-1, j-1)}
+        let hScore = table.[i-1, j].score - gapPenalty
+        let horizontal = {score = hScore; ancestor = Some (i-1, j)}
+        let vScore = table.[i, j-1].score - gapPenalty
+        let vertical = {score = vScore; ancestor = Some (i, j-1)}
+        let zero = {score = 0; ancestor = None}
+        List.maxBy (fun dpcell -> dpcell.score) [diagonal; horizontal; vertical; zero]
+
 let SmithWaterman (p : AlignmentParams) s1 s2 = 
-
-    let s = p.s
-    let d = p.d
-
     let l1 = String.toList s1
     let l2 = String.toList s2
 
     let m = List.length l1
     let n = List.length l2
 
-    let getScore = getScore s l1 l2
-
-    let rec fillTable (table : NWCell [,]) = function
-        | Some (i, j) ->
-            let newCell = 
-                match eligibleDirections (i, j) with
-                | Nothing ->
-                    {score = 0; ancestor = None}
-                | H ->
-                    {score = table.[i-1, j].score - d; ancestor = Some (i-1, j)}
-                | V -> 
-                    {score = table.[i, j-1].score - d; ancestor = Some (i, j-1)}
-                | HVD ->
-                    let dScore = table.[i-1, j-1].score + (getScore i j)
-                    let diagonal = {score = dScore; ancestor = Some (i-1, j-1)}
-                    let hScore = table.[i-1, j].score - d
-                    let horizontal = {score = hScore; ancestor = Some (i-1, j)}
-                    let vScore = table.[i, j-1].score - d
-                    let vertical = {score = vScore; ancestor = Some (i, j-1)}
-                    let zero = {score = 0; ancestor = None}
-                    List.maxBy (fun nwcell -> nwcell.score) [diagonal; horizontal; vertical; zero]
-            table.[i, j] <- newCell
-            fillTable table (getNextCell m n (i, j))
-        | None ->
-            table
-
     let table = createTable m n
     let startCell = Some (0, 0)
 
-    let dptable = fillTable table startCell
+    let gapPenalty = p.d
+    let mutationScore = getScore p.s l1 l2
+    let scorer = smithWatermanScorer mutationScore gapPenalty
+
+    let dptable = fillTable m n scorer table startCell
 
     let tracebackStart = 
+        // Can we make this stateless with folds?
         let mutable maxIndex = (0, 0)
         let mutable maxValue = -1
         [0 .. m] |> List.iter (fun i ->
