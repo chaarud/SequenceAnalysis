@@ -13,10 +13,6 @@ let main argv =
 //    let x = NeedlemanWunsch p "abbababbabababba" "abbabababa"
 //    printfn "%A" x
 
-    printfn "hello..."
-    printfn "%A" (parseSomething())
-//    printfn "%A" (getDerivation())
-    
-    printfn "goodbye"
+    parseSomething ()
 
     0
