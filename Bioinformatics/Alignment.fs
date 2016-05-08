@@ -20,7 +20,7 @@ type EligibleDirections =
     | H
     | Nothing
 
-type NWParams = 
+type AlignmentParams = 
     {
         d : int
         s : Map<char*char, int>
@@ -46,7 +46,29 @@ let getNextCell m n = function
             else
                 if i+j+1-n <= m then Some (i+j+1-n, n) else Some (m, n)
 
-let NeedlemanWunsch (p : NWParams) s1 s2 = 
+let getScore map (l1 : _ list) (l2 : _ list) i j = Map.find (l1.[i-1], l2.[j-1]) map
+let getChar (l : _ list) i = l.[i-1]
+
+let rec traceback l1 l2 (table : NWCell [,]) (alignment : (Symbol*Symbol) list) = function
+    | Some (i, j) ->
+        let cell = table.[i, j]
+        let currentPairAlignment = 
+            match cell.ancestor with
+            | Some (k, l) when (k, l) = (i-1, j) -> 
+                (Character <| getChar l1 i, Gap)
+            | Some (k, l) when (k, l) = (i, j-1) -> 
+                (Gap, Character <| getChar l2 j)
+            | Some (k, l) when (k, l) = (i-1, j-1) -> 
+                (Character <| getChar l1 i, Character <| getChar l2 j)
+            | _ ->
+                // This is an invalid state.
+                // Should only be reached when we're finished aligning.
+                (Gap, Gap)
+        traceback l1 l2 table (currentPairAlignment :: alignment) cell.ancestor
+    | None ->
+        List.tail alignment
+
+let NeedlemanWunsch (p : AlignmentParams) s1 s2 = 
 
     // TODO we shouldn't have to index into l1.[i-1] because the lists are 0-indexed and the DP table is effectively 1-indexed.
     // one possible solution is to include a xChar and yChar string in the NWCell record.
@@ -60,6 +82,8 @@ let NeedlemanWunsch (p : NWParams) s1 s2 =
     let m = List.length l1
     let n = List.length l2
 
+    let getScore = getScore s l1 l2
+
     let rec fillTable (table : NWCell [,]) = function
         | Some (i, j) ->
             let newCell = 
@@ -71,39 +95,78 @@ let NeedlemanWunsch (p : NWParams) s1 s2 =
                 | V -> 
                     {score = table.[i, j-1].score - d; ancestor = Some (i, j-1)}
                 | HVD ->
-                    let diagonalScore = table.[i-1, j-1].score + (Map.find (l1.[i-1], l2.[j-1]) s)
-                    let diagonal = {score = diagonalScore; ancestor = Some (i-1, j-1)}
-                    let horizontalScore = table.[i-1, j].score - d
-                    let horizontal = {score = horizontalScore; ancestor = Some (i-1, j)}
-                    let verticalScore = table.[i, j-1].score - d
-                    let vertical = {score = verticalScore; ancestor = Some (i, j-1)}
+                    let dScore = table.[i-1, j-1].score + (getScore i j)
+                    let diagonal = {score = dScore; ancestor = Some (i-1, j-1)}
+                    let hScore = table.[i-1, j].score - d
+                    let horizontal = {score = hScore; ancestor = Some (i-1, j)}
+                    let vScore = table.[i, j-1].score - d
+                    let vertical = {score = vScore; ancestor = Some (i, j-1)}
                     List.maxBy (fun nwcell -> nwcell.score) [diagonal; horizontal; vertical]
             table.[i, j] <- newCell
             fillTable table (getNextCell m n (i, j))
         | None ->
             table
 
-    let rec traceback (table : NWCell [,]) (alignment : (Symbol*Symbol) list) = function
-        | Some (i, j) ->
-            let cell = table.[i, j]
-            let currentPairAlignment = 
-                match cell.ancestor with
-                | Some (k, l) when (k, l) = (i-1, j) -> 
-                    (Character l1.[i-1], Gap)
-                | Some (k, l) when (k, l) = (i, j-1) -> 
-                    (Gap, Character l2.[j-1])
-                | Some (k, l) when (k, l) = (i-1, j-1) -> 
-                    (Character l1.[i-1], Character l2.[j-1])
-                | _ ->
-                    // TODO get rid of these (Gap, Gap) pairs
-                    (Gap, Gap)
-            traceback table (currentPairAlignment :: alignment) cell.ancestor
-        | None ->
-            alignment
-
     let table = createTable m n
     let startCell = Some (0, 0)
     let dptable = fillTable table startCell
 
     let tracebackStart = Some (m, n)
-    traceback table [] tracebackStart
+    traceback l1 l2 table [] tracebackStart
+
+let SmithWaterman (p : AlignmentParams) s1 s2 = 
+
+    let s = p.s
+    let d = p.d
+
+    let l1 = String.toList s1
+    let l2 = String.toList s2
+
+    let m = List.length l1
+    let n = List.length l2
+
+    let getScore = getScore s l1 l2
+
+    let rec fillTable (table : NWCell [,]) = function
+        | Some (i, j) ->
+            let newCell = 
+                match eligibleDirections (i, j) with
+                | Nothing ->
+                    {score = 0; ancestor = None}
+                | H ->
+                    {score = table.[i-1, j].score - d; ancestor = Some (i-1, j)}
+                | V -> 
+                    {score = table.[i, j-1].score - d; ancestor = Some (i, j-1)}
+                | HVD ->
+                    let dScore = table.[i-1, j-1].score + (getScore i j)
+                    let diagonal = {score = dScore; ancestor = Some (i-1, j-1)}
+                    let hScore = table.[i-1, j].score - d
+                    let horizontal = {score = hScore; ancestor = Some (i-1, j)}
+                    let vScore = table.[i, j-1].score - d
+                    let vertical = {score = vScore; ancestor = Some (i, j-1)}
+                    let zero = {score = 0; ancestor = None}
+                    List.maxBy (fun nwcell -> nwcell.score) [diagonal; horizontal; vertical; zero]
+            table.[i, j] <- newCell
+            fillTable table (getNextCell m n (i, j))
+        | None ->
+            table
+
+    let table = createTable m n
+    let startCell = Some (0, 0)
+
+    let dptable = fillTable table startCell
+
+    let tracebackStart = 
+        let mutable maxIndex = (0, 0)
+        let mutable maxValue = -1
+        [0 .. m] |> List.iter (fun i ->
+            [0..n] |> List.iter (fun j ->
+                if table.[i, j].score > maxValue 
+                    then 
+                        maxValue <- table.[i, j].score
+                        maxIndex <- (i, j)
+                    else ()))
+        Some maxIndex
+
+    traceback l1 l2 table [] tracebackStart
+
