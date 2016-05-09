@@ -27,11 +27,17 @@ let matchTerminal = function
     | Terminal _ -> true
     | _ -> false
 
-let matchNonterminal = 
-    matchTerminal >> not
-//    function
-//    | Nonterminal _ -> true
-//    | _ -> false
+// works
+//let matchNonterminal foo = 
+//    (matchTerminal foo |> not)
+
+// works
+let matchNonterminal = function
+    | Nonterminal _ -> true
+    | _ -> false
+
+// doesn't work
+//let matchNonterminal = matchTerminal >> not
 
 let productions rules nt = 
     rules
