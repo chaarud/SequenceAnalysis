@@ -22,95 +22,101 @@ module List =
 type Decision = Accept | Reject
 
 // TODO: test edge cases
-// TODO: lots of hard to understand List.rev stuff, might introduce bugs.
-// TODO: Move out matcher and predictor functions (mutually recursive with handleNextSymbol)
 
+let matchTerminal = function
+    | Terminal _ -> true
+    | _ -> false
+
+let matchNonterminal = matchTerminal >> not
+
+let productions rules nt = 
+    rules
+    |> List.filter (fst >> ((=) nt)) 
+    |> List.map snd
+    // this List.rev is hard to reason about
+    |> List.map List.rev
+
+let startsWith prefix xs = 
+    let start = List.truncate (List.length prefix) xs
+    start = prefix
+
+let windowize production = 
+    let rec loop acc production = 
+        match production with
+        | [] -> acc
+        | _ ->
+            let window, remainingList = List.splitWith matchTerminal production
+            let remainingList = remainingList|> List.skipWhile matchNonterminal
+            loop (window :: acc) remainingList
+    let windows = loop [] production
+    // this List.rev is just because we're doing window :: acc, if we appended each window we wouldn't need this.
+    List.rev windows
+
+let rec matchWindow input window = 
+    match startsWith window input with
+    | true ->
+        let newInput = List.skip (List.length window) input
+        Some newInput
+    | false -> 
+        if List.length (List.tail input) < List.length window 
+            then None
+            else matchWindow (List.tail input) window
+
+let tryPickProduction productions input : (_ option) = 
+    // productions is an already-filtered list of LHS productions
+    // so they all have the same nonterminal on the RHS of the rule
+    let rec loop input windows = 
+        match windows with
+        | [] -> true
+        | thisWindow :: remainingWindows ->
+            let newInput = matchWindow input thisWindow
+            match newInput with
+            | Some newInput ->
+                loop newInput remainingWindows
+            | None ->
+                false
+
+    let rec outerLoop productions input = 
+        List.tryFind (fun production ->
+            let windows = windowize production
+            loop input windows) productions
+
+    outerLoop productions input
+
+// TODO: can we remove passing rules around all 3 functions?
+// passing a continuation might make things more confusing:
+// let continuation = handleNextSymbol rules stack
+// and handleTerminalSymbol continuation input sym
+
+let rec handleNextSymbol (rules : ('b * Symbol<'a,'b> list) list) (stack : Stack<_>) input = 
+    if stack.Count = 0 
+        then Accept
+        else
+            match stack.Pop () with
+            | Nonterminal nt -> 
+                let productions = productions rules nt
+                produce rules stack input productions
+            | (Terminal _) as sym -> 
+                handleTerminalSymbol rules stack input sym
+
+and handleTerminalSymbol rules stack input sym = 
+    if sym = List.head input
+        then handleNextSymbol rules stack (List.tail input)
+        else Reject
+
+and produce rules stack input productions =
+    tryPickProduction productions input
+    |> function
+        | Some production ->
+            production |> List.iter (stack.Push)
+            handleNextSymbol rules stack input
+        | None -> Reject
+    
 // Top-down parsing
 let parse (start, rules) input = 
     let stack = new Stack<Symbol<'a, 'b>> ()
     stack.Push <| Nonterminal start
-
-    let rec handleNextSymbol (stack : Stack<_>) input = 
-        if stack.Count = 0 
-            then Accept
-        else
-            match stack.Pop () with
-            | Nonterminal nt -> 
-                let productions = 
-                    rules
-                    |> List.filter (fst >> ((=) nt)) 
-                    |> List.map snd
-                    // this List.rev is hard to reason about
-                    |> List.map List.rev
-
-                let listifiedStack = stack.ToArray() |> Array.toList
-
-                let matchTerminal = function
-                    | Terminal _ -> true
-                    | _ -> false
-
-                let matchNonterminal = matchTerminal >> not
-
-                let windowize production = 
-                    let rec loop acc production = 
-                        match production with
-                        | [] -> acc
-                        | _ ->
-                            let window, remainingList = List.splitWith matchTerminal production
-                            let remainingList = remainingList|> List.skipWhile matchNonterminal
-                            loop (window :: acc) remainingList
-                    let windows = loop [] production
-                    // this List.rev is just because we're doing window :: acc, if we appended each window we wouldn't need this.
-                    List.rev windows
-                        
-                let startsWith prefix xs = 
-                    let start = List.truncate (List.length prefix) xs
-                    start = prefix
-
-                let rec matchWindow input window = 
-                    match startsWith window input with
-                    | true ->
-                        let newInput = List.skip (List.length window) input
-                        Some newInput
-                    | false -> 
-                        if List.length (List.tail input) < List.length window 
-                            then None
-                            else matchWindow (List.tail input) window
-
-                let tryPickProduction productions input : (_ option) = 
-                    // productions is an already-filtered list of LHS productions
-                    // so they all have the same nonterminal on the RHS of the rule
-                    let rec loop input windows = 
-                        match windows with
-                        | [] -> true
-                        | thisWindow :: remainingWindows ->
-                            let newInput = matchWindow input thisWindow
-                            match newInput with
-                            | Some newInput ->
-                                loop newInput remainingWindows
-                            | None ->
-                                false
-
-                    let rec outerLoop productions input = 
-                        List.tryFind (fun production ->
-                            let windows = windowize production
-                            loop input windows) productions
-
-                    outerLoop productions input
-
-                tryPickProduction productions input
-                |> function
-                    | Some production ->
-                        production |> List.iter (stack.Push)
-                        handleNextSymbol stack input
-                    | None -> Reject
-                    
-            | (Terminal _) as sym -> 
-                if sym = List.head input
-                    then handleNextSymbol stack (List.tail input)
-                    else Reject
-
-    handleNextSymbol stack input
+    handleNextSymbol rules stack input
 
 // From a CFG, produce a random derivation. This is likely to loop forever.
 let produceRandom ((start, rules) : CFG<_, _>) =

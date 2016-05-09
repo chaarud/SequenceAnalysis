@@ -36,15 +36,22 @@ let eligibleDirections = function
     | (i, j) when i > 0 && j > 0 -> HVD
   
 let getNextCell m n = function
+    // the last cell.
     | (i, j) when i = m && j = n ->
         None
+    // interior of the table, can move diagonally up and right.
     | (i, j) when i+1 <= m && j-1 >= 0 ->
         Some (i+1, j-1)
     | (i, j) ->
         if i+j+1 <= n 
+            // there is another row to start a new diagonal
             then Some (0, i+j+1)
             else
-                if i+j+1-n <= m then Some (i+j+1-n, n) else Some (m, n)
+                if i+j+1-n <= m 
+                    // no full diagonal start a partial diagonal
+                    then Some (i+j+1-n, n)
+                    // there is no other cell to fill
+                    else None
 
 let getScore map (l1 : _ list) (l2 : _ list) i j = Map.find (l1.[i-1], l2.[j-1]) map
 let getChar (l : _ list) i = l.[i-1]
@@ -80,7 +87,7 @@ let rec fillTable m n scorer (table : DPCell [,]) = function
     | None ->
         table
 
-let needlemanWunschScorer getScore gapPenalty (table : DPCell [,]) (i, j) = 
+let needlemanWunschScorer substitutionScore gapPenalty (table : DPCell [,]) (i, j) = 
     match eligibleDirections (i, j) with
     | Nothing ->
         {score = 0; ancestor = None}
@@ -89,7 +96,7 @@ let needlemanWunschScorer getScore gapPenalty (table : DPCell [,]) (i, j) =
     | V -> 
         {score = table.[i, j-1].score - gapPenalty; ancestor = Some (i, j-1)}
     | HVD ->
-        let dScore = table.[i-1, j-1].score + (getScore i j)
+        let dScore = table.[i-1, j-1].score + (substitutionScore i j)
         let diagonal = {score = dScore; ancestor = Some (i-1, j-1)}
         let hScore = table.[i-1, j].score - gapPenalty
         let horizontal = {score = hScore; ancestor = Some (i-1, j)}
@@ -108,20 +115,20 @@ let NeedlemanWunsch (p : AlignmentParams) s1 s2 =
     let startCell = Some (0, 0)
 
     let gapPenalty = p.d
-    let mutationScore = getScore p.s l1 l2
-    let scorer = needlemanWunschScorer mutationScore gapPenalty
+    let substitutionScore = getScore p.s l1 l2
+    let scorer = needlemanWunschScorer substitutionScore gapPenalty
 
     let dptable = fillTable m n scorer table startCell
 
     let tracebackStart = Some (m, n)
     traceback l1 l2 table [] tracebackStart
 
-let smithWatermanScorer getScore gapPenalty (table : DPCell [,]) (i, j) = 
+let smithWatermanScorer substitutionScore gapPenalty (table : DPCell [,]) (i, j) = 
     match eligibleDirections (i, j) with
     | Nothing | H | V ->
         {score = 0; ancestor = None}
     | HVD ->
-        let dScore = table.[i-1, j-1].score + (getScore i j)
+        let dScore = table.[i-1, j-1].score + (substitutionScore i j)
         let diagonal = {score = dScore; ancestor = Some (i-1, j-1)}
         let hScore = table.[i-1, j].score - gapPenalty
         let horizontal = {score = hScore; ancestor = Some (i-1, j)}
@@ -141,8 +148,8 @@ let SmithWaterman (p : AlignmentParams) s1 s2 =
     let startCell = Some (0, 0)
 
     let gapPenalty = p.d
-    let mutationScore = getScore p.s l1 l2
-    let scorer = smithWatermanScorer mutationScore gapPenalty
+    let substitutionScore = getScore p.s l1 l2
+    let scorer = smithWatermanScorer substitutionScore gapPenalty
 
     let dptable = fillTable m n scorer table startCell
 
