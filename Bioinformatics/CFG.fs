@@ -27,7 +27,11 @@ let matchTerminal = function
     | Terminal _ -> true
     | _ -> false
 
-let matchNonterminal = matchTerminal >> not
+let matchNonterminal = 
+    matchTerminal >> not
+//    function
+//    | Nonterminal _ -> true
+//    | _ -> false
 
 let productions rules nt = 
     rules
@@ -62,7 +66,7 @@ let rec matchWindow input window =
             then None
             else matchWindow (List.tail input) window
 
-let tryPickProduction productions input : (_ option) = 
+let tryPickProduction input productions = 
     // productions is an already-filtered list of LHS productions
     // so they all have the same nonterminal on the RHS of the rule
     let rec loop input windows = 
@@ -83,34 +87,23 @@ let tryPickProduction productions input : (_ option) =
 
     outerLoop productions input
 
-// TODO: can we remove passing rules around all 3 functions?
-// passing a continuation might make things more confusing:
-// let continuation = handleNextSymbol rules stack
-// and handleTerminalSymbol continuation input sym
-
-let rec handleNextSymbol (rules : ('b * Symbol<'a,'b> list) list) (stack : Stack<_>) input = 
+let rec handleNextSymbol rules (stack : Stack<_>) input = 
     if stack.Count = 0 
         then Accept
         else
             match stack.Pop () with
             | Nonterminal nt -> 
-                let productions = productions rules nt
-                produce rules stack input productions
+                productions rules nt
+                |> tryPickProduction input
+                |> function
+                    | Some production ->
+                        production |> List.iter (stack.Push)
+                        handleNextSymbol rules stack input
+                    | None -> Reject
             | (Terminal _) as sym -> 
-                handleTerminalSymbol rules stack input sym
-
-and handleTerminalSymbol rules stack input sym = 
-    if sym = List.head input
-        then handleNextSymbol rules stack (List.tail input)
-        else Reject
-
-and produce rules stack input productions =
-    tryPickProduction productions input
-    |> function
-        | Some production ->
-            production |> List.iter (stack.Push)
-            handleNextSymbol rules stack input
-        | None -> Reject
+                if sym = List.head input
+                    then handleNextSymbol rules stack (List.tail input)
+                    else Reject
     
 // Top-down parsing
 let parse (start, rules) input = 
