@@ -117,17 +117,23 @@ let Viterbi (startState : Begin<'State>) (hmm : HMM<'State, 'Emission>) (observa
     |> viterbiTraceback
     |> List.map (fun cell -> cell.state)
 
-let sumForwards hmm startState prevColumn currState = 
+let sumForwards (hmm: HMM<_,_>) startState prevColumn currState = 
     prevColumn
     |> Array.sumBy (fun pCell ->
         let pTransition = 
-            Map.find pCell.state hmm
-            |> fun i -> i.transitions
-            |> List.find (fst >> ((=) currState)) 
-            |> snd
+            match pCell.state with
+            | Some pState ->
+                Map.find pState hmm
+                |> fun i -> i.transitions
+                |> List.find (fst >> ((=) currState)) 
+                |> snd
+            | None ->
+                startState
+                |> List.find (fst >> ((=) currState))
+                |> snd
         pCell.score * pTransition)
 
-let updatedForwardCell hmm startState table currState currEmission i l = 
+let updatedForwardCell hmm startState table (currState) currEmission i l = 
     // am I slicing the right way?
     let prevColumn = Array.init (Array2D.length2 table) (fun j -> table.[i-1, j])
     let pEmission = 
