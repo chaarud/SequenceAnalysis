@@ -14,29 +14,25 @@ type NodeInfo<'State, 'Emission> =
         transitions : ('State * Probability) list
     }
 
-type HmmState<'State> = 
-    | Begin
-    | End 
-    | Internal of 'State
-
 // each element in 'state should appear at most once
-type HMM<'State, 'Emission when 'State : comparison> = Map<HmmState<'State>, NodeInfo<'State, 'Emission>>
+type HMM<'State, 'Emission when 'State : comparison> = Map<'State, NodeInfo<'State, 'Emission>>
+
+type Begin<'State> = ('State * Probability) list
 
 type ViterbiCell<'State, 'Emission> = 
     {
         score : float
         ancestor : ViterbiCell<'State, 'Emission> option
         // None is the begin state
-        state : HmmState<'State>
+        state : 'State option
         emission : 'Emission option
     }
 
-let makeViterbiTable (states : HmmState<'State> list) (observations : 'Emission list) = 
-    //(List.length states) - 1 because we don't need the end state
-    Array2D.zeroCreate<ViterbiCell<'State, 'Emission>> ((List.length states) - 1) ((List.length observations) + 1)
+let makeViterbiTable (states : 'State list) (observations : 'Emission list) = 
+    Array2D.zeroCreate<ViterbiCell<'State, 'Emission>> ((List.length states) + 1) ((List.length observations) + 1)
     |> Array2D.mapi (fun idxState idxEmission cell ->
         {cell with
-            state = if idxState = 0 then Begin else states.[idxState - 1]
+            state = if idxState = 0 then None else Some states.[idxState - 1]
             emission = if idxEmission = 0 then None else Some observations.[idxEmission - 1]
         })
 
@@ -48,7 +44,38 @@ let getNextViterbiCell m n (i, j) =
                 then Some (i+1, 0)
                 else None
 
-let rec fillViterbiTable (hmm : HMM<_, _>) coord (table : ViterbiCell<_,_> [,]) = 
+let pGetToHiddenState hmm startState currState prevCell = 
+    match prevCell.state with
+    | Some prevState ->
+        let prevInfo = Map.find prevState hmm
+        let pTransitionToThisState = 
+            prevInfo.transitions
+            |> List.find (fst >> ((=) currState))
+            |> snd
+        pTransitionToThisState * prevCell.score
+    | None ->
+        startState 
+        |> List.find (fst >> ((=) currState))
+        |> snd
+
+let updatedCell hmm startState table currState currEmission i l = 
+    // am I slicing the right way?
+    let prevColumn = Array.init (Array2D.length2 table) (fun j -> table.[i-1, j])
+    let pEmission = 
+        Map.find currState hmm
+        |> fun i -> i.emissions
+        |> List.find (fst >> ((=) currEmission))
+        |> snd
+    let pGetToHiddenState = pGetToHiddenState hmm startState currState
+    let prevCell =
+        prevColumn
+        |> Array.maxBy pGetToHiddenState
+    let pGetToCurrState = pGetToHiddenState prevCell
+    {table.[i,l] with
+        score = pEmission * pGetToCurrState
+        ancestor = Some prevCell}
+
+let rec fillViterbiTable startState hmm coord (table : ViterbiCell<_,_> [,]) = 
     match coord with
     | (0, 0) ->
         table.[0,0] <- {table.[0,0] with score = 1.}
@@ -59,53 +86,15 @@ let rec fillViterbiTable (hmm : HMM<_, _>) coord (table : ViterbiCell<_,_> [,]) 
         // there's no way we are in the begin state if it's not the first column, right?
         table.[x,0] <- {table.[x,0] with score = 0.}
     | (i, l) ->
-        let state = table.[i,l].state
-        let emission = table.[i,l].emission
-        // am I slicing the right way?
-        let prevColumn = Array.init (Array2D.length2 table) (fun j -> table.[i-1, j])
-        match state, emission with
-        // everything should match here
-        | Some s, Some e ->
-            let info = Map.find s hmm
-            let pEmission = 
-                info.emissions
-                |> List.find (fst >> ((=) e))
-                |> snd
-
-            let pGetToHiddenState currState prevCell = 
-                match prevCell.state with
-                | Some prevState ->
-                    let prevInfo = Map.find prevState hmm
-                    let pTransitionToThisState = 
-                        prevInfo.transitions
-                        |> List.find (fst >> ((=) currState))
-                        |> snd
-                    pTransitionToThisState * prevCell.score
-                | None ->
-                    // this is wrong
-                    // represent the begin state transition probabilities!
-                    1. 
-
-            let prevCell =
-                prevColumn
-                |> Array.maxBy (pGetToHiddenState s)
-            let stuff = pGetToHiddenState s prevCell
-
-            let thisCell = 
-                {
-                    table.[i,l] with
-                        score = pEmission * stuff
-                        ancestor = Some prevCell
-                }
-            table.[i,l] <- thisCell
-        | _, _ ->
-            // something went wrong
-            ()
-
+        match table.[i,l].state, table.[i,l].emission with
+        | Some currState, Some currEmission ->
+            table.[i,l] <- updatedCell hmm startState table currState currEmission i l
+        | _, _ -> 
+            printf "Something went very wrong"
     getNextViterbiCell (Array2D.length1 table) (Array2D.length2 table) coord
     |> function
         | Some newCoord ->
-            fillViterbiTable hmm newCoord table
+            fillViterbiTable startState hmm newCoord table
         | None ->
             table
 
@@ -116,17 +105,15 @@ let viterbiTraceback table =
 
     let rec loop acc cell = 
         match cell.ancestor with
-        | Some ancestor ->
-            loop (ancestor :: acc) ancestor
-        | None ->
-            acc
+        | Some ancestor -> loop (ancestor :: acc) ancestor
+        | None -> acc
 
     loop [] maxCell
 
-let Viterbi (hmm : HMM<'State, 'Emission>) (observations : 'Emission list) = 
-    let states : HmmState<'State> list = hmm |> Map.toList |> List.map fst
+let Viterbi (startState : Begin<'State>) (hmm : HMM<'State, 'Emission>) (observations : 'Emission list) = 
+    let states : 'State list = hmm |> Map.toList |> List.map fst
     makeViterbiTable states observations 
-    |> fillViterbiTable hmm (0, 0) 
+    |> fillViterbiTable startState hmm (0, 0) 
     |> viterbiTraceback
     |> List.map (fun cell -> cell.state)
 
