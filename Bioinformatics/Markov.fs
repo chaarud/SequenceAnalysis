@@ -117,3 +117,55 @@ let Viterbi (startState : Begin<'State>) (hmm : HMM<'State, 'Emission>) (observa
     |> viterbiTraceback
     |> List.map (fun cell -> cell.state)
 
+let sumForwards hmm startState prevColumn currState = 
+    prevColumn
+    |> Array.sumBy (fun pCell ->
+        let pTransition = 
+            Map.find pCell.state hmm
+            |> fun i -> i.transitions
+            |> List.find (fst >> ((=) currState)) 
+            |> snd
+        pCell.score * pTransition)
+
+let updatedForwardCell hmm startState table currState currEmission i l = 
+    // am I slicing the right way?
+    let prevColumn = Array.init (Array2D.length2 table) (fun j -> table.[i-1, j])
+    let pEmission = 
+        Map.find currState hmm
+        |> fun i -> i.emissions
+        |> List.find (fst >> ((=) currEmission))
+        |> snd
+    let sumThing = sumForwards hmm startState prevColumn currState
+    {
+        table.[i,l] with
+            score = pEmission * sumThing
+            ancestor = None //Ancestors are junk for forwards table filling
+    }
+
+let rec fillForwardTable startState hmm coord (table : ViterbiCell<_,_> [,]) =
+    match coord with
+    | (0, 0) ->
+        table.[0,0] <- {table.[0,0] with score = 1.}
+    | (0, k) ->
+        // do we need an ancestor pointer here?
+        table.[0,k] <- {table.[0,k] with score = 0.} 
+    | (x, 0) ->
+        // there's no way we are in the begin state if it's not the first column, right?
+        table.[x,0] <- {table.[x,0] with score = 0.}
+    | (i, l) ->
+        match table.[i,l].state, table.[i,l].emission with
+        | Some currState, Some currEmission ->
+            table.[i,l] <- updatedForwardCell hmm startState table currState currEmission i l
+        | _, _ -> 
+            printf "Something went very wrong"
+    getNextViterbiCell (Array2D.length1 table) (Array2D.length2 table) coord
+    |> function
+        | Some newCoord ->
+            fillForwardTable startState hmm newCoord table
+        | None ->
+            table
+
+let Forward (startState : Begin<'State>) (hmm : HMM<'State, 'Emission>) (observations : 'Emission list) = 
+    let states : 'State list = hmm |> Map.toList |> List.map fst
+    makeViterbiTable states observations
+    |> fillForwardTable startState hmm (0, 0)
