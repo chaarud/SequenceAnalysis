@@ -1,5 +1,8 @@
 ﻿module Bioinformatics.Markov
 
+//TODO add validation for probability distributions, other invariants
+//or reflect it in tests?
+
 // enforce that it's between 0 and 1?
 type Probability = float
 
@@ -11,23 +14,29 @@ type NodeInfo<'State, 'Emission> =
         transitions : ('State * Probability) list
     }
 
+type HmmState<'State> = 
+    | Begin
+    | End 
+    | Internal of 'State
+
 // each element in 'state should appear at most once
-type HMM<'State, 'Emission when 'State : comparison> = Map<'State, NodeInfo<'State, 'Emission>>
+type HMM<'State, 'Emission when 'State : comparison> = Map<HmmState<'State>, NodeInfo<'State, 'Emission>>
 
 type ViterbiCell<'State, 'Emission> = 
     {
         score : float
         ancestor : ViterbiCell<'State, 'Emission> option
         // None is the begin state
-        state : 'State option 
+        state : HmmState<'State>
         emission : 'Emission option
     }
 
-let makeViterbiTable (states : 'State list) (observations : 'Emission list) = 
-    Array2D.zeroCreate<ViterbiCell<'State, 'Emission>> ((List.length states) + 1) ((List.length observations) + 1)
+let makeViterbiTable (states : HmmState<'State> list) (observations : 'Emission list) = 
+    //(List.length states) - 1 because we don't need the end state
+    Array2D.zeroCreate<ViterbiCell<'State, 'Emission>> ((List.length states) - 1) ((List.length observations) + 1)
     |> Array2D.mapi (fun idxState idxEmission cell ->
         {cell with
-            state = if idxState = 0 then None else Some states.[idxState - 1]
+            state = if idxState = 0 then Begin else states.[idxState - 1]
             emission = if idxEmission = 0 then None else Some observations.[idxEmission - 1]
         })
 
@@ -39,7 +48,7 @@ let getNextViterbiCell m n (i, j) =
                 then Some (i+1, 0)
                 else None
 
-let rec fillViterbiTable hmm coord (table : ViterbiCell<_,_> [,]) = 
+let rec fillViterbiTable (hmm : HMM<_, _>) coord (table : ViterbiCell<_,_> [,]) = 
     match coord with
     | (0, 0) ->
         table.[0,0] <- {table.[0,0] with score = 1.}
@@ -115,8 +124,9 @@ let viterbiTraceback table =
     loop [] maxCell
 
 let Viterbi (hmm : HMM<'State, 'Emission>) (observations : 'Emission list) = 
-    let states : 'State list = hmm |> Map.toList |> List.map fst
+    let states : HmmState<'State> list = hmm |> Map.toList |> List.map fst
     makeViterbiTable states observations 
     |> fillViterbiTable hmm (0, 0) 
     |> viterbiTraceback
     |> List.map (fun cell -> cell.state)
+
