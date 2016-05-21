@@ -110,6 +110,7 @@ let viterbiTraceback table =
 
     loop [] maxCell
 
+// we are currently ignoring transition probabilities to a special end state...
 let Viterbi (startState : Begin<'State>) (hmm : HMM<'State, 'Emission>) (observations : 'Emission list) = 
     let states : 'State list = hmm |> Map.toList |> List.map fst
     makeViterbiTable states observations 
@@ -117,6 +118,8 @@ let Viterbi (startState : Begin<'State>) (hmm : HMM<'State, 'Emission>) (observa
     |> viterbiTraceback
     |> List.map (fun cell -> cell.state)
 
+// It's unclear if the forwards algorithm is correct, especially wrt termination
+// clean up representation - shouldn't use ViterbiCells, etc
 let sumForwards (hmm: HMM<_,_>) startState prevColumn currState = 
     prevColumn
     |> Array.sumBy (fun pCell ->
@@ -133,7 +136,7 @@ let sumForwards (hmm: HMM<_,_>) startState prevColumn currState =
                 |> snd
         pCell.score * pTransition)
 
-let updatedForwardCell hmm startState table (currState) currEmission i l = 
+let updatedForwardCell hmm startState table currState currEmission i l = 
     // am I slicing the right way?
     let prevColumn = Array.init (Array2D.length2 table) (fun j -> table.[i-1, j])
     let pEmission = 
@@ -171,7 +174,74 @@ let rec fillForwardTable startState hmm coord (table : ViterbiCell<_,_> [,]) =
         | None ->
             table
 
+let terminate table = 
+    let size = Array2D.length2 table
+    let finalColumn = Array.init size (fun j -> table.[size, j])
+    Array.sumBy (fun cell -> cell.score)
+
+//this ignores transition probabilities to a special end state
 let Forward (startState : Begin<'State>) (hmm : HMM<'State, 'Emission>) (observations : 'Emission list) = 
     let states : 'State list = hmm |> Map.toList |> List.map fst
     makeViterbiTable states observations
     |> fillForwardTable startState hmm (0, 0)
+    |> terminate
+
+type PlusType = Plus | Minus
+
+type Nucleotide = A | C | T | G
+
+type HiddenNucleotideState = Nucleotide * PlusType
+
+let APlus = 
+    {
+        transitions = [(A, 0.); (C, 0.); (T, 0.); (G, 0.)]
+        emissions = [(A, 1.); (C, 0.); (T, 0.); (G, 0.)]
+    }
+let AMinus = 
+    {
+        transitions = [(A, 0.); (C, 0.); (T, 0.); (G, 0.)]
+        emissions = [(A, 1.); (C, 0.); (T, 0.); (G, 0.)]
+    }
+let CPlus = 
+    {
+        transitions = [(A, 0.); (C, 0.); (T, 0.); (G, 0.)]
+        emissions = [(A, 0.); (C, 1.); (T, 0.); (G, 0.)]
+    }
+let CMinus = 
+    {
+        transitions = [(A, 0.); (C, 0.); (T, 0.); (G, 0.)]
+        emissions = [(A, 0.); (C, 1.); (T, 0.); (G, 0.)]
+    }
+let TPlus =
+    {
+        transitions = [(A, 0.); (C, 0.); (T, 0.); (G, 0.)]
+        emissions = [(A, 0.); (C, 0.); (T, 1.); (G, 0.)]
+    }
+let TMinus =
+    {
+        transitions = [(A, 0.); (C, 0.); (T, 0.); (G, 0.)]
+        emissions = [(A, 0.); (C, 0.); (T, 1.); (G, 0.)]
+    } 
+let GPlus = 
+    {
+        transitions = [(A, 0.); (C, 0.); (T, 0.); (G, 0.)]
+        emissions = [(A, 0.); (C, 0.); (T, 0.); (G, 1.)]
+    }
+let GMinus =
+    {
+        transitions = [(A, 0.); (C, 0.); (T, 0.); (G, 0.)]
+        emissions = [(A, 0.); (C, 0.); (T, 0.); (G, 1.)]
+    }
+let exampleHmm = 
+    [
+        ((A, Plus), APlus);
+        ((C, Plus), CPlus);
+        ((T, Plus), TPlus);
+        ((G, Plus), GPlus);
+        ((A, Minus), AMinus);
+        ((C, Minus), CMinus);
+        ((T, Minus), TMinus);
+        ((G, Minus), GMinus)
+    ]
+    |> Map.ofList
+
