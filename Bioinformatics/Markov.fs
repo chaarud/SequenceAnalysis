@@ -19,6 +19,10 @@ type HMM<'State, 'Emission when 'State : comparison> = Map<'State, NodeInfo<'Sta
 
 type Begin<'State> = ('State * Probability) list
 
+(*
+The Viterbi Algorithm
+*)
+
 type ViterbiCell<'State, 'Emission> = 
     {
         score : float
@@ -118,6 +122,13 @@ let Viterbi (startState : Begin<'State>) (hmm : HMM<'State, 'Emission>) (observa
     |> viterbiTraceback
     |> List.map (fun cell -> cell.state)
 
+
+
+
+(*
+The Forward Algorithm
+*)
+    
 // It's unclear if the forwards algorithm is correct, especially wrt termination
 // clean up representation - shouldn't use ViterbiCells, etc
 let sumForwards (hmm: HMM<_,_>) startState prevColumn currState = 
@@ -186,62 +197,87 @@ let Forward (startState : Begin<'State>) (hmm : HMM<'State, 'Emission>) (observa
     |> fillForwardTable startState hmm (0, 0)
     |> terminate
 
-type PlusType = Plus | Minus
+(*
+Walk through an HMM for n steps and get an observation
+*)
+let foldUntil (predicate : 'State -> bool) (folder : 'State -> 'T -> 'State) initialState (xs : 'T list) : 'T option = 
 
-type Nucleotide = A | C | T | G
+    let rec loop xs innerState outerState = 
+        match outerState with
+        | None ->
+            match xs with
+            | x :: xs ->
+                if predicate innerState 
+                    then (Some x)
+                    else (None)
+                |> loop xs (folder innerState x)
+            | _ -> None
+        | Some outerState -> Some outerState
 
-type HiddenNucleotideState = Nucleotide * PlusType
+    loop xs initialState None
 
-let APlus = 
-    {
-        transitions = [(A, 0.); (C, 0.); (T, 0.); (G, 0.)]
-        emissions = [(A, 1.); (C, 0.); (T, 0.); (G, 0.)]
-    }
-let AMinus = 
-    {
-        transitions = [(A, 0.); (C, 0.); (T, 0.); (G, 0.)]
-        emissions = [(A, 1.); (C, 0.); (T, 0.); (G, 0.)]
-    }
-let CPlus = 
-    {
-        transitions = [(A, 0.); (C, 0.); (T, 0.); (G, 0.)]
-        emissions = [(A, 0.); (C, 1.); (T, 0.); (G, 0.)]
-    }
-let CMinus = 
-    {
-        transitions = [(A, 0.); (C, 0.); (T, 0.); (G, 0.)]
-        emissions = [(A, 0.); (C, 1.); (T, 0.); (G, 0.)]
-    }
-let TPlus =
-    {
-        transitions = [(A, 0.); (C, 0.); (T, 0.); (G, 0.)]
-        emissions = [(A, 0.); (C, 0.); (T, 1.); (G, 0.)]
-    }
-let TMinus =
-    {
-        transitions = [(A, 0.); (C, 0.); (T, 0.); (G, 0.)]
-        emissions = [(A, 0.); (C, 0.); (T, 1.); (G, 0.)]
-    } 
-let GPlus = 
-    {
-        transitions = [(A, 0.); (C, 0.); (T, 0.); (G, 0.)]
-        emissions = [(A, 0.); (C, 0.); (T, 0.); (G, 1.)]
-    }
-let GMinus =
-    {
-        transitions = [(A, 0.); (C, 0.); (T, 0.); (G, 0.)]
-        emissions = [(A, 0.); (C, 0.); (T, 0.); (G, 1.)]
-    }
-let exampleHmm = 
-    [
-        ((A, Plus), APlus);
-        ((C, Plus), CPlus);
-        ((T, Plus), TPlus);
-        ((G, Plus), GPlus);
-        ((A, Minus), AMinus);
-        ((C, Minus), CMinus);
-        ((T, Minus), TMinus);
-        ((G, Minus), GMinus)
-    ]
-    |> Map.ofList
+let getNext (xs : _ list) = 
+    let rnd = new System.Random ()
+    let random = rnd.NextDouble ()
+    xs |> foldUntil ((>) random) (fun state elem -> state + (snd elem)) 0.0
 
+let getNextStateInfo hmm transitions : NodeInfo<_,_> = 
+    getNext transitions
+    |> Option.get
+    |> fst
+    |> fun state -> Map.find state hmm
+
+let getEmission emissions = 
+    getNext emissions
+    |> Option.get
+    |> fst
+
+let walkTheChain hmm startState n = 
+    let firstStateInfo = getNextStateInfo hmm startState
+
+    let rec loop emissions transitions acc = function
+        | i when i <= 0 ->
+            List.rev acc
+        | i ->
+            let emission = getEmission emissions
+            let nextStateInfo = getNextStateInfo hmm transitions
+            loop nextStateInfo.emissions nextStateInfo.transitions (emission :: acc) (i-1) 
+
+    loop firstStateInfo.emissions firstStateInfo.transitions [] n
+
+
+
+(*
+Example: The occasionally dishonest casino
+*)
+
+type Dice = Fair | Unfair
+
+type DiceRoll = One | Two | Three | Four | Five | Six
+
+let diceRolls = 
+    Microsoft.FSharp.Reflection.FSharpType.GetUnionCases typeof<DiceRoll>
+    |> Array.map (fun case -> Microsoft.FSharp.Reflection.FSharpValue.MakeUnion(case, [||]) :?> DiceRoll)
+
+let oneSixth = 1./6.
+
+let fairInfo = 
+    {
+        transitions = [(Unfair, 0.05); (Fair, 0.95)]
+        emissions = diceRolls |> Array.toList |> List.map (fun dr -> (dr, oneSixth))
+    }
+
+let unfairInfo = 
+    {
+        transitions = [(Unfair, 0.9); (Fair, 0.1)]
+        emissions = [(One, 0.1); (Two, 0.1); (Three, 0.1); (Four, 0.1); (Five, 0.1); (Six, 0.5)]
+    }
+
+let exampleHmm : HMM<Dice, DiceRoll> = [(Fair, fairInfo); (Unfair, unfairInfo)] |> Map.ofList
+
+let exampleStartState : Begin<Dice> = [(Unfair, 0.2); (Fair, 0.8)]
+
+(*
+Do something
+*)
+let doSomething () = walkTheChain exampleHmm exampleStartState 100
