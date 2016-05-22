@@ -1,6 +1,7 @@
 ﻿open Bioinformatics.Alignment
 open Bioinformatics.Grammar
 open Bioinformatics.Markov
+open Bioinformatics
 
 [<EntryPoint>]                    
 let main argv = 
@@ -19,12 +20,11 @@ let main argv =
 
 //    parseSomething ()
 
-    let foo = [0.09; 0.2; 0.05; 0.13; 0.15; 0.3]
-    let thresh = 0.5
-    let bar = foldUntil ((>) thresh) (+) 0.0 foo
-    printfn "%A" bar
+//    let foo = [0.09; 0.2; 0.05; 0.13; 0.15; 0.3; 0.22]
+//    let thresh = 0.5
+//    let bar = tryFindWhileFolding ((<) thresh) (+) 0.0 foo
+//    printfn "%A" bar
 
-//    let x = Bioinformatics.Markov.doSomething ()
-//    printfn "%A" x
+    Markov.doSomething ()
 
     0

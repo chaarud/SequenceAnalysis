@@ -4,7 +4,7 @@
 //or reflect it in tests?
 
 // enforce that it's between 0 and 1?
-type Probability = float
+type Probability = double
 
 type NodeInfo<'State, 'Emission> = 
     {
@@ -25,7 +25,7 @@ The Viterbi Algorithm
 
 type ViterbiCell<'State, 'Emission> = 
     {
-        score : float
+        score : double
         ancestor : ViterbiCell<'State, 'Emission> option
         // None is the begin state
         state : 'State option
@@ -35,16 +35,18 @@ type ViterbiCell<'State, 'Emission> =
 let makeViterbiTable (states : 'State list) (observations : 'Emission list) = 
     Array2D.zeroCreate<ViterbiCell<'State, 'Emission>> ((List.length states) + 1) ((List.length observations) + 1)
     |> Array2D.mapi (fun idxState idxEmission cell ->
-        {cell with
+        {
+            score = -1.0 // can viterbi generate negative scores? No
+            ancestor = None
             state = if idxState = 0 then None else Some states.[idxState - 1]
             emission = if idxEmission = 0 then None else Some observations.[idxEmission - 1]
         })
 
 let getNextViterbiCell m n (i, j) = 
-    if j+1 <= n
+    if j+1 < n
         then Some (i, j+1)
         else 
-            if i+1 <= m
+            if i+1 < m
                 then Some (i+1, 0)
                 else None
 
@@ -61,10 +63,10 @@ let pGetToHiddenState hmm startState currState prevCell =
         startState 
         |> List.find (fst >> ((=) currState))
         |> snd
+        |> (*) prevCell.score //this will give 0, because prevCell.score should be 0
 
 let updatedCell hmm startState table currState currEmission i l = 
-    // am I slicing the right way?
-    let prevColumn = Array.init (Array2D.length2 table) (fun j -> table.[i-1, j])
+    let prevColumn = Array.init (Array2D.length1 table) (fun j -> table.[j, l-1])
     let pEmission = 
         Map.find currState hmm
         |> fun i -> i.emissions
@@ -74,10 +76,15 @@ let updatedCell hmm startState table currState currEmission i l =
     let prevCell =
         prevColumn
         |> Array.maxBy pGetToHiddenState
+//    printfn "=====================\n\nPREVIOUS COLUMN: %A" prevColumn
+//    printfn "\n~~~~~~~~~~~~~~~~~~\nPREVIOUS CELL: %A\n\n==========================" prevCell
+//    let prevCellFromTable = 
+//        let positionInColumn = Array.findIndex ((=) prevCell) prevColumn
+//        table.[positionInColumn, l-1]
     let pGetToCurrState = pGetToHiddenState prevCell
     {table.[i,l] with
         score = pEmission * pGetToCurrState
-        ancestor = Some prevCell}
+        ancestor = Some prevCell}//FromTable}
 
 let rec fillViterbiTable startState hmm coord (table : ViterbiCell<_,_> [,]) = 
     match coord with
@@ -103,14 +110,19 @@ let rec fillViterbiTable startState hmm coord (table : ViterbiCell<_,_> [,]) =
             table
 
 let viterbiTraceback table = 
-    let L = Array2D.length1 table
-    let lastColumn = Array.init (Array2D.length2 table) (fun j -> table.[L, j])
+    let L = Array2D.length2 table
+    //Array2Ds are indexed with length1 = length of columns, length2 = length of row
+    let lastColumn = Array.init (Array2D.length1 table) (fun j -> table.[j, L-1])
     let maxCell = Array.maxBy (fun cell -> cell.score) lastColumn
+
+//    printfn "starting traceback..."
+//    printfn "last column: %A" lastColumn
+//    printfn "max cell in last column: %A" maxCell
 
     let rec loop acc cell = 
         match cell.ancestor with
-        | Some ancestor -> loop (ancestor :: acc) ancestor
-        | None -> acc
+        | Some ancestor -> loop (cell :: acc) ancestor
+        | None -> (cell :: acc)
 
     loop [] maxCell
 
@@ -118,7 +130,17 @@ let viterbiTraceback table =
 let Viterbi (startState : Begin<'State>) (hmm : HMM<'State, 'Emission>) (observations : 'Emission list) = 
     let states : 'State list = hmm |> Map.toList |> List.map fst
     makeViterbiTable states observations 
+//    |> fun table -> 
+//        printfn "table.length1: %A" <| Array2D.length1 table
+//        printfn "table.length2: %A" <| Array2D.length2 table
+//        printfn "table: %A" <| table
+//        table
     |> fillViterbiTable startState hmm (0, 0) 
+//    |> fun table ->
+//        printfn "after filling"
+//        printfn "table.scores: %A" <| Array2D.map (fun cell -> cell.score) table
+//        printfn "table: %A" <| table
+//        table
     |> viterbiTraceback
     |> List.map (fun cell -> cell.state)
 
@@ -200,50 +222,67 @@ let Forward (startState : Begin<'State>) (hmm : HMM<'State, 'Emission>) (observa
 (*
 Walk through an HMM for n steps and get an observation
 *)
-let foldUntil (predicate : 'State -> bool) (folder : 'State -> 'T -> 'State) initialState (xs : 'T list) : 'T option = 
+let tryFindWhileFolding (predicate : 'State -> bool) (folder : 'State -> 'T -> 'State) initialState (xs : 'T list) : 'T option = 
+    let rec loop innerState xs = 
+//        if we didn't want to return an option, we'd have to throw on an empty input
+//        match xs with
+//        | x :: [] -> x
+//        | x :: xs ->
+//            let newState = folder innerState x
+//            if predicate newState 
+//                then x
+//                else loop newState xs
+//        | [] -> //throw?
+        match xs with
+        //This would ensure that we would return something always on a non empty list
+        //if we can trust that the input list is a probability distribution, this should be OK...
+        //| x :: [] -> Some x 
+        | x :: xs ->
+            let newState = folder innerState x
+            if predicate newState 
+                then Some x
+                else loop newState xs
+        | _ -> None
 
-    let rec loop xs innerState outerState = 
-        match outerState with
-        | None ->
-            match xs with
-            | x :: xs ->
-                if predicate innerState 
-                    then (Some x)
-                    else (None)
-                |> loop xs (folder innerState x)
-            | _ -> None
-        | Some outerState -> Some outerState
+    loop initialState xs
 
-    loop xs initialState None
+let rnd = new System.Random ()
 
-let getNext (xs : _ list) = 
-    let rnd = new System.Random ()
+let getNextTupleFromProbabilityDistribution (xs : _ list) = 
     let random = rnd.NextDouble ()
-    xs |> foldUntil ((>) random) (fun state elem -> state + (snd elem)) 0.0
+    // ((>) foo) is confusing - it means (fun x -> foo > x), which is not what we want. It does not mean "greater than foo", it means "foo greater than".
+    xs |> tryFindWhileFolding (fun x -> x > random) (fun state elem -> state + (snd elem)) 0.0
 
-let getNextStateInfo hmm transitions : NodeInfo<_,_> = 
-    getNext transitions
-    |> Option.get
+let chooseNextEventFromProbabilityDistribution events =
+    events
+    |> getNextTupleFromProbabilityDistribution 
+    |> Option.get //bad, fix this
     |> fst
-    |> fun state -> Map.find state hmm
 
-let getEmission emissions = 
-    getNext emissions
-    |> Option.get
-    |> fst
+//let chooseNextEventFromProbabilityDistribution =
+//    getNextTupleFromProbabilityDistribution 
+//    >> Option.get //bad, fix this
+//    >> fst
+
+let getEmission = chooseNextEventFromProbabilityDistribution
+
+let getNextStateInfo hmm transitions = 
+    transitions
+    |> chooseNextEventFromProbabilityDistribution 
+    |> fun state -> Map.find state hmm 
+    |> fun info -> info.emissions, info.transitions
 
 let walkTheChain hmm startState n = 
-    let firstStateInfo = getNextStateInfo hmm startState
-
-    let rec loop emissions transitions acc = function
+    let rec loop (emissions, transitions) acc = function
         | i when i <= 0 ->
             List.rev acc
         | i ->
             let emission = getEmission emissions
             let nextStateInfo = getNextStateInfo hmm transitions
-            loop nextStateInfo.emissions nextStateInfo.transitions (emission :: acc) (i-1) 
+            loop nextStateInfo (emission :: acc) (i-1) 
 
-    loop firstStateInfo.emissions firstStateInfo.transitions [] n
+    let firstStateInfo = getNextStateInfo hmm startState
+    loop firstStateInfo [] n
 
 
 
@@ -273,11 +312,21 @@ let unfairInfo =
         emissions = [(One, 0.1); (Two, 0.1); (Three, 0.1); (Four, 0.1); (Five, 0.1); (Six, 0.5)]
     }
 
-let exampleHmm : HMM<Dice, DiceRoll> = [(Fair, fairInfo); (Unfair, unfairInfo)] |> Map.ofList
+let exampleHmm = [(Fair, fairInfo); (Unfair, unfairInfo)] |> Map.ofList
 
 let exampleStartState : Begin<Dice> = [(Unfair, 0.2); (Fair, 0.8)]
 
 (*
 Do something
 *)
-let doSomething () = walkTheChain exampleHmm exampleStartState 100
+let decodeOnce () = 
+    let steps = 10
+    let observation = walkTheChain exampleHmm exampleStartState steps
+    printfn "walking for %i steps: %A" steps observation
+
+    let viterbiDecoding = Viterbi exampleStartState exampleHmm observation
+    printfn "viterbi decoding of the observation: %A" viterbiDecoding
+
+
+let doSomething () = 
+    [1..10] |> List.iter (fun _ -> decodeOnce ())
