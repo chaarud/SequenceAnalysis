@@ -1,7 +1,7 @@
 ﻿module Bioinformatics.Markov
 
 //TODO add validation for probability distributions, other invariants
-//or reflect it in tests?
+//or reflect it in property based tests?
 
 // enforce that it's between 0 and 1?
 type Probability = double
@@ -20,9 +20,12 @@ type HMM<'State, 'Emission when 'State : comparison> = Map<'State, NodeInfo<'Sta
 type Begin<'State> = ('State * Probability) list
 
 (*
-The Viterbi Algorithm
-*)
 
+
+The Viterbi Algorithm
+
+
+*)
 type ViterbiCell<'State, 'Emission> = 
     {
         score : double
@@ -42,12 +45,29 @@ let makeViterbiTable (states : 'State list) (observations : 'Emission list) =
             emission = if idxEmission = 0 then None else Some observations.[idxEmission - 1]
         })
 
+//Array2Ds are indexed with length1 = length of columns, length2 = length of row
+let getColumnFromTable l table = 
+    Array.init (Array2D.length1 table) (fun j -> table.[j, l])
+
+let getLastColumn table = 
+    let numColumns = Array2D.length2 table
+    getColumnFromTable (numColumns-1) table
+
+//I think this traverses by row...
+//let getNextViterbiCell m n (i, j) = 
+//    if j+1 < n
+//        then Some (i, j+1)
+//        else 
+//            if i+1 < m
+//                then Some (i+1, 0)
+//                else None
+
 let getNextViterbiCell m n (i, j) = 
-    if j+1 < n
-        then Some (i, j+1)
-        else 
-            if i+1 < m
-                then Some (i+1, 0)
+    if i+1 < m
+        then Some (i+1, j)
+        else
+            if j+1 < n
+                then Some (0, j+1)
                 else None
 
 let pGetToHiddenState hmm startState currState prevCell = 
@@ -63,10 +83,12 @@ let pGetToHiddenState hmm startState currState prevCell =
         startState 
         |> List.find (fst >> ((=) currState))
         |> snd
-        |> (*) prevCell.score //this will give 0, because prevCell.score should be 0
+        //this should give 0, because prevCell.score should be 0
+        //can we just elmiminate this entirely, and get rid of the startState parameter here?
+        |> (*) prevCell.score 
 
 let updatedCell hmm startState table currState currEmission i l = 
-    let prevColumn = Array.init (Array2D.length1 table) (fun j -> table.[j, l-1])
+    let prevColumn = getColumnFromTable (l-1) table 
     let pEmission = 
         Map.find currState hmm
         |> fun i -> i.emissions
@@ -76,15 +98,10 @@ let updatedCell hmm startState table currState currEmission i l =
     let prevCell =
         prevColumn
         |> Array.maxBy pGetToHiddenState
-//    printfn "=====================\n\nPREVIOUS COLUMN: %A" prevColumn
-//    printfn "\n~~~~~~~~~~~~~~~~~~\nPREVIOUS CELL: %A\n\n==========================" prevCell
-//    let prevCellFromTable = 
-//        let positionInColumn = Array.findIndex ((=) prevCell) prevColumn
-//        table.[positionInColumn, l-1]
     let pGetToCurrState = pGetToHiddenState prevCell
     {table.[i,l] with
         score = pEmission * pGetToCurrState
-        ancestor = Some prevCell}//FromTable}
+        ancestor = Some prevCell}
 
 let rec fillViterbiTable startState hmm coord (table : ViterbiCell<_,_> [,]) = 
     match coord with
@@ -110,14 +127,8 @@ let rec fillViterbiTable startState hmm coord (table : ViterbiCell<_,_> [,]) =
             table
 
 let viterbiTraceback table = 
-    let L = Array2D.length2 table
-    //Array2Ds are indexed with length1 = length of columns, length2 = length of row
-    let lastColumn = Array.init (Array2D.length1 table) (fun j -> table.[j, L-1])
+    let lastColumn = getLastColumn table
     let maxCell = Array.maxBy (fun cell -> cell.score) lastColumn
-
-//    printfn "starting traceback..."
-//    printfn "last column: %A" lastColumn
-//    printfn "max cell in last column: %A" maxCell
 
     let rec loop acc cell = 
         match cell.ancestor with
@@ -130,27 +141,17 @@ let viterbiTraceback table =
 let Viterbi (startState : Begin<'State>) (hmm : HMM<'State, 'Emission>) (observations : 'Emission list) = 
     let states : 'State list = hmm |> Map.toList |> List.map fst
     makeViterbiTable states observations 
-//    |> fun table -> 
-//        printfn "table.length1: %A" <| Array2D.length1 table
-//        printfn "table.length2: %A" <| Array2D.length2 table
-//        printfn "table: %A" <| table
-//        table
     |> fillViterbiTable startState hmm (0, 0) 
-//    |> fun table ->
-//        printfn "after filling"
-//        printfn "table.scores: %A" <| Array2D.map (fun cell -> cell.score) table
-//        printfn "table: %A" <| table
-//        table
     |> viterbiTraceback
-    |> List.map (fun cell -> cell.state)
-
-
-
+    |> List.choose (fun cell -> cell.state)
 
 (*
+
+
 The Forward Algorithm
+
+
 *)
-    
 // It's unclear if the forwards algorithm is correct, especially wrt termination
 // clean up representation - shouldn't use ViterbiCells, etc
 let sumForwards (hmm: HMM<_,_>) startState prevColumn currState = 
@@ -164,14 +165,14 @@ let sumForwards (hmm: HMM<_,_>) startState prevColumn currState =
                 |> List.find (fst >> ((=) currState)) 
                 |> snd
             | None ->
+                // should give 0 because pCell.score should be 0 for these cells
                 startState
                 |> List.find (fst >> ((=) currState))
                 |> snd
         pCell.score * pTransition)
 
 let updatedForwardCell hmm startState table currState currEmission i l = 
-    // am I slicing the right way?
-    let prevColumn = Array.init (Array2D.length2 table) (fun j -> table.[i-1, j])
+    let prevColumn = getColumnFromTable (l-1) table 
     let pEmission = 
         Map.find currState hmm
         |> fun i -> i.emissions
@@ -207,32 +208,28 @@ let rec fillForwardTable startState hmm coord (table : ViterbiCell<_,_> [,]) =
         | None ->
             table
 
-let terminate table = 
-    let size = Array2D.length2 table
-    let finalColumn = Array.init size (fun j -> table.[size, j])
-    Array.sumBy (fun cell -> cell.score)
+let terminateForward table = 
+    //define with composition if it doesn't result in crazy errors
+    table
+    |> getLastColumn
+    |> Array.sumBy (fun cell -> cell.score)
 
 //this ignores transition probabilities to a special end state
 let Forward (startState : Begin<'State>) (hmm : HMM<'State, 'Emission>) (observations : 'Emission list) = 
     let states : 'State list = hmm |> Map.toList |> List.map fst
     makeViterbiTable states observations
     |> fillForwardTable startState hmm (0, 0)
-    |> terminate
+    |> terminateForward
 
 (*
+
+
 Walk through an HMM for n steps and get an observation
+
+
 *)
 let tryFindWhileFolding (predicate : 'State -> bool) (folder : 'State -> 'T -> 'State) initialState (xs : 'T list) : 'T option = 
     let rec loop innerState xs = 
-//        if we didn't want to return an option, we'd have to throw on an empty input
-//        match xs with
-//        | x :: [] -> x
-//        | x :: xs ->
-//            let newState = folder innerState x
-//            if predicate newState 
-//                then x
-//                else loop newState xs
-//        | [] -> //throw?
         match xs with
         //This would ensure that we would return something always on a non empty list
         //if we can trust that the input list is a probability distribution, this should be OK...
@@ -284,12 +281,13 @@ let walkTheChain hmm startState n =
     let firstStateInfo = getNextStateInfo hmm startState
     loop firstStateInfo [] n
 
-
-
 (*
-Example: The occasionally dishonest casino
-*)
 
+
+Example: The occasionally dishonest casino
+
+
+*)
 type Dice = Fair | Unfair
 
 type DiceRoll = One | Two | Three | Four | Five | Six
@@ -317,7 +315,11 @@ let exampleHmm = [(Fair, fairInfo); (Unfair, unfairInfo)] |> Map.ofList
 let exampleStartState : Begin<Dice> = [(Unfair, 0.2); (Fair, 0.8)]
 
 (*
+
+
 Do something
+
+
 *)
 let decodeOnce () = 
     let steps = 10
@@ -327,6 +329,10 @@ let decodeOnce () =
     let viterbiDecoding = Viterbi exampleStartState exampleHmm observation
     printfn "viterbi decoding of the observation: %A" viterbiDecoding
 
+    let forwardProbability = Forward exampleStartState exampleHmm observation
+    printfn "forward probability of the observation: %A" forwardProbability
+
 
 let doSomething () = 
-    [1..10] |> List.iter (fun _ -> decodeOnce ())
+    decodeOnce ()
+//    [1..10] |> List.iter (fun _ -> decodeOnce ())
