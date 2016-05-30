@@ -43,7 +43,7 @@ let updatedForwardCell hmm startState table currState currEmission i l =
             ancestor = None //Ancestors are junk for forwards table filling
     }
 
-let rec fillForwardTable startState hmm coord (table : ViterbiCell<_,_> [,]) =
+let rec fillForwardTable startState hmm coord (table : MarkovDPCell<_,_> [,]) =
     match coord with
     | (0, 0) ->
         table.[0,0] <- {table.[0,0] with score = 1.}
@@ -59,7 +59,7 @@ let rec fillForwardTable startState hmm coord (table : ViterbiCell<_,_> [,]) =
             table.[i,l] <- updatedForwardCell hmm startState table currState currEmission i l
         | _, _ -> 
             printf "Something went very wrong"
-    getNextViterbiCell (Array2D.length1 table) (Array2D.length2 table) coord
+    getNextCell (Array2D.length1 table) (Array2D.length2 table) coord
     |> function
         | Some newCoord ->
             fillForwardTable startState hmm newCoord table
@@ -72,7 +72,6 @@ let terminateForward startState hmm table =
     |> getLastColumn
     |> Array.sumBy (fun cell -> 
         let state = cell.state
-        //could/should pattern match, should be ok though
         let pEnd =
             match state with
             | Some lastState ->
@@ -91,10 +90,8 @@ let terminateForward startState hmm table =
                     | _ -> 0.
         cell.score * pEnd)
 
-//this ignores transition probabilities to a special end state
-let Forward (startState : Begin<'State>) (hmm : HMM<'State, 'Emission>) (observations : 'Emission list) = 
+let forward (startState : Begin<'State>) (hmm : HMM<'State, 'Emission>) (observations : 'Emission list) = 
     let states : 'State list = hmm |> Map.toList |> List.map fst
-    makeViterbiTable states observations
+    makeDPTable states observations
     |> fillForwardTable startState hmm (0, 0)
     |> terminateForward startState hmm
-

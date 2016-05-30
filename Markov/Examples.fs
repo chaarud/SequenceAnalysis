@@ -40,5 +40,3 @@ let unfairInfo =
     }
 
 let exampleHmm = [(Fair, fairInfo); (Unfair, unfairInfo)] |> Map.ofList
-
-

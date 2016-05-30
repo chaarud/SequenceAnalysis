@@ -1,6 +1,7 @@
 ﻿module Markov.Observe
 
 open Types
+
 (*
 
 
@@ -50,7 +51,7 @@ let getNextStateInfo hmm transitions =
         Map.find nextState hmm 
         |> fun info -> info.emissions, info.transitions)
 
-let walkTheChain hmm startState n = 
+let observe hmm startState n = 
     let rec loop acc (emissions, transitions) = function
         | i when i <= 0 ->
             List.rev acc
@@ -63,4 +64,3 @@ let walkTheChain hmm startState n =
 
     getNextStateInfo hmm startState
     |> Option.fold (fun acc firstState -> loop acc firstState n) []
-

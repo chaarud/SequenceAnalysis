@@ -43,7 +43,7 @@ let updatedCell hmm startState table currState currEmission i l =
         score = pEmission * pGetToCurrState
         ancestor = Some prevCell}
 
-let rec fillViterbiTable startState hmm coord (table : ViterbiCell<_,_> [,]) = 
+let rec fillViterbiTable startState hmm coord (table : MarkovDPCell<_,_> [,]) = 
     match coord with
     | (0, 0) ->
         table.[0,0] <- {table.[0,0] with score = 1.}
@@ -65,7 +65,7 @@ let rec fillViterbiTable startState hmm coord (table : ViterbiCell<_,_> [,]) =
     //| (i, l) when i = (Array2D.length1 table) ->
 //        updatedFinalColumnCell hmm startState table currState currEmission i l
             
-    getNextViterbiCell (Array2D.length1 table) (Array2D.length2 table) coord
+    getNextCell (Array2D.length1 table) (Array2D.length2 table) coord
     |> function
         | Some newCoord ->
             fillViterbiTable startState hmm newCoord table
@@ -84,10 +84,9 @@ let viterbiTraceback table =
     loop [] maxCell
 
 // we are currently ignoring transition probabilities to a special end state...
-let Viterbi (startState : Begin<'State>) (hmm : HMM<'State, 'Emission>) (observations : 'Emission list) = 
+let viterbi (startState : Begin<'State>) (hmm : HMM<'State, 'Emission>) (observations : 'Emission list) = 
     let states : 'State list = hmm |> Map.toList |> List.map fst
-    makeViterbiTable states observations 
+    makeDPTable states observations 
     |> fillViterbiTable startState hmm (0, 0) 
     |> viterbiTraceback
     |> List.choose (fun cell -> cell.state)
-

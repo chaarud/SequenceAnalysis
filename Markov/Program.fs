@@ -15,13 +15,13 @@ Do something
 *)
 let decodeOnce () = 
     let steps = 10
-    let observation = walkTheChain exampleHmm exampleStartState steps
+    let observation = observe exampleHmm exampleStartState steps
     printfn "walking for %i steps: %A" steps observation
 
-    let viterbiDecoding = Viterbi exampleStartState exampleHmm observation
+    let viterbiDecoding = viterbi exampleStartState exampleHmm observation
     printfn "viterbi decoding of the observation: %A" viterbiDecoding
 
-    let forwardProbability = Forward exampleStartState exampleHmm observation
+    let forwardProbability = forward exampleStartState exampleHmm observation
     printfn "forward probability of the observation: %A" forwardProbability
 
     printfn "\n"
