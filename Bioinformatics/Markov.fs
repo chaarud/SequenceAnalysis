@@ -1,5 +1,10 @@
 ﻿module Bioinformatics.Markov
 
+//unused
+//needs to be validated/enforced
+//first todo w/reflection for finite discrete countable algebraic data 'T
+type Distribution<'T> = 'T -> float
+
 //TODO add validation for probability distributions, other invariants
 //or reflect it in property based tests?
 
@@ -11,13 +16,14 @@ type NodeInfo<'State, 'Emission> =
         // enforce these probabilities sum to 1
         emissions : ('Emission * Probability) list
         // enforce these probabilities sum to 1
-        transitions : ('State * Probability) list
+        transitions : (('State option) * Probability) list
     }
 
 // each element in 'state should appear at most once
 type HMM<'State, 'Emission when 'State : comparison> = Map<'State, NodeInfo<'State, 'Emission>>
 
-type Begin<'State> = ('State * Probability) list
+//'State option because the observations could be empty (ie start -> end) I suppose.
+type Begin<'State> = (('State option) * Probability) list
 
 (*
 
@@ -39,6 +45,7 @@ let makeViterbiTable (states : 'State list) (observations : 'Emission list) =
     Array2D.zeroCreate<ViterbiCell<'State, 'Emission>> ((List.length states) + 1) ((List.length observations) + 1)
     |> Array2D.mapi (fun idxState idxEmission cell ->
         {
+            // should the score be an option as well
             score = -1.0 // can viterbi generate negative scores? No
             ancestor = None
             state = if idxState = 0 then None else Some states.[idxState - 1]
@@ -76,12 +83,12 @@ let pGetToHiddenState hmm startState currState prevCell =
         let prevInfo = Map.find prevState hmm
         let pTransitionToThisState = 
             prevInfo.transitions
-            |> List.find (fst >> ((=) currState))
+            |> List.find (fst >> ((=) (Some currState)))
             |> snd
         pTransitionToThisState * prevCell.score
     | None ->
         startState 
-        |> List.find (fst >> ((=) currState))
+        |> List.find (fst >> ((=) (Some currState)))
         |> snd
         //this should give 0, because prevCell.score should be 0
         //can we just elmiminate this entirely, and get rid of the startState parameter here?
@@ -162,12 +169,12 @@ let sumForwards (hmm: HMM<_,_>) startState prevColumn currState =
             | Some pState ->
                 Map.find pState hmm
                 |> fun i -> i.transitions
-                |> List.find (fst >> ((=) currState)) 
+                |> List.find (fst >> ((=) (Some currState)))
                 |> snd
             | None ->
                 // should give 0 because pCell.score should be 0 for these cells
                 startState
-                |> List.find (fst >> ((=) currState))
+                |> List.find (fst >> ((=) (Some currState)))
                 |> snd
         pCell.score * pTransition)
 
@@ -224,6 +231,19 @@ let Forward (startState : Begin<'State>) (hmm : HMM<'State, 'Emission>) (observa
 (*
 
 
+The Backward Algorithm
+
+
+*)
+//let Backward (startState : Begin<'State>) (hmm : HMM<'State, 'Emission>) (observations : 'Emission list) = 
+//    let states : 'State list = hmm |> Map.toList |> List.map fst
+//    makeViterbiTable states observations
+//    |> fillBackwardTable startState hmm (0,0)
+//    |> terminateBackward
+
+(*
+
+
 Walk through an HMM for n steps and get an observation
 
 
@@ -266,20 +286,23 @@ let getEmission = chooseNextEventFromProbabilityDistribution
 let getNextStateInfo hmm transitions = 
     transitions
     |> chooseNextEventFromProbabilityDistribution 
-    |> fun state -> Map.find state hmm 
-    |> fun info -> info.emissions, info.transitions
+    |> Option.map (fun nextState -> 
+        Map.find nextState hmm 
+        |> fun info -> info.emissions, info.transitions)
 
 let walkTheChain hmm startState n = 
-    let rec loop (emissions, transitions) acc = function
+    let rec loop acc (emissions, transitions) = function
         | i when i <= 0 ->
             List.rev acc
         | i ->
             let emission = getEmission emissions
-            let nextStateInfo = getNextStateInfo hmm transitions
-            loop nextStateInfo (emission :: acc) (i-1) 
+            getNextStateInfo hmm transitions
+            |> function
+                | Some nextStateInfo -> loop (emission :: acc) nextStateInfo (i-1) 
+                | None -> List.rev acc
 
-    let firstStateInfo = getNextStateInfo hmm startState
-    loop firstStateInfo [] n
+    getNextStateInfo hmm startState
+    |> Option.fold (fun acc firstState -> loop acc firstState n) []
 
 (*
 
@@ -292,27 +315,33 @@ type Dice = Fair | Unfair
 
 type DiceRoll = One | Two | Three | Four | Five | Six
 
-let diceRolls = 
+let unionCases (typ : System.Type) = 
     Microsoft.FSharp.Reflection.FSharpType.GetUnionCases typeof<DiceRoll>
     |> Array.map (fun case -> Microsoft.FSharp.Reflection.FSharpValue.MakeUnion(case, [||]) :?> DiceRoll)
 
 let oneSixth = 1./6.
 
+let fairEmissionDistribution = 
+    typeof<DiceRoll> |> unionCases |> Array.toList |> List.map (fun dr -> (dr, oneSixth))
+
+let unfairEmissionDistribution = 
+    [(One, 0.1); (Two, 0.1); (Three, 0.1); (Four, 0.1); (Five, 0.1); (Six, 0.5)]
+
+let exampleStartState : Begin<Dice> = [(Some Unfair, 0.2); (Some Fair, 0.8)]
+
 let fairInfo = 
     {
-        transitions = [(Unfair, 0.05); (Fair, 0.95)]
-        emissions = diceRolls |> Array.toList |> List.map (fun dr -> (dr, oneSixth))
+        transitions = [(Some Fair, 0.94); (Some Unfair, 0.05); (None, 0.01)]
+        emissions = fairEmissionDistribution
     }
 
-let unfairInfo = 
+let unfairInfo =
     {
-        transitions = [(Unfair, 0.9); (Fair, 0.1)]
-        emissions = [(One, 0.1); (Two, 0.1); (Three, 0.1); (Four, 0.1); (Five, 0.1); (Six, 0.5)]
+        transitions = [(Some Fair, 0.1); (Some Unfair, 0.89); (None, 0.01)]
+        emissions = unfairEmissionDistribution
     }
 
 let exampleHmm = [(Fair, fairInfo); (Unfair, unfairInfo)] |> Map.ofList
-
-let exampleStartState : Begin<Dice> = [(Unfair, 0.2); (Fair, 0.8)]
 
 (*
 
@@ -332,7 +361,9 @@ let decodeOnce () =
     let forwardProbability = Forward exampleStartState exampleHmm observation
     printfn "forward probability of the observation: %A" forwardProbability
 
+    printfn "\n"
+
 
 let doSomething () = 
-    decodeOnce ()
-//    [1..10] |> List.iter (fun _ -> decodeOnce ())
+//    decodeOnce ()
+    [1..10] |> List.iter (fun _ -> decodeOnce ())
