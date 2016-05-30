@@ -1,7 +1,7 @@
 ﻿open Bioinformatics.Alignment
 open Bioinformatics.Grammar
-open Bioinformatics.Markov
 open Bioinformatics
+open Markov
 
 [<EntryPoint>]                    
 let main argv = 
@@ -25,6 +25,6 @@ let main argv =
 //    let bar = tryFindWhileFolding ((<) thresh) (+) 0.0 foo
 //    printfn "%A" bar
 
-    Markov.doSomething ()
+    Runner.doSomething ()
 
     0

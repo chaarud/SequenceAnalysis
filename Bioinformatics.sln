@@ -3,6 +3,8 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 2012
 Project("{f2a71f9b-5d33-465a-a702-920d77279786}") = "Bioinformatics", "Bioinformatics\Bioinformatics.fsproj", "{927A7ECA-41C9-4F00-95E0-FBDEE535F05D}"
 EndProject
+Project("{f2a71f9b-5d33-465a-a702-920d77279786}") = "Markov", "Markov\Markov.fsproj", "{928A0DA2-6FE4-4D17-9A1F-DD42502BCD62}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x86 = Debug|x86
@@ -13,5 +15,9 @@ Global
 		{927A7ECA-41C9-4F00-95E0-FBDEE535F05D}.Debug|x86.Build.0 = Debug|x86
 		{927A7ECA-41C9-4F00-95E0-FBDEE535F05D}.Release|x86.ActiveCfg = Release|x86
 		{927A7ECA-41C9-4F00-95E0-FBDEE535F05D}.Release|x86.Build.0 = Release|x86
+		{928A0DA2-6FE4-4D17-9A1F-DD42502BCD62}.Debug|x86.ActiveCfg = Debug|x86
+		{928A0DA2-6FE4-4D17-9A1F-DD42502BCD62}.Debug|x86.Build.0 = Debug|x86
+		{928A0DA2-6FE4-4D17-9A1F-DD42502BCD62}.Release|x86.ActiveCfg = Release|x86
+		{928A0DA2-6FE4-4D17-9A1F-DD42502BCD62}.Release|x86.Build.0 = Release|x86
 	EndGlobalSection
 EndGlobal

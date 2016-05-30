@@ -3,10 +3,10 @@
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">x86</Platform>
-    <ProjectGuid>{927A7ECA-41C9-4F00-95E0-FBDEE535F05D}</ProjectGuid>
+    <ProjectGuid>{928A0DA2-6FE4-4D17-9A1F-DD42502BCD62}</ProjectGuid>
     <OutputType>Exe</OutputType>
-    <RootNamespace>Bioinformatics</RootNamespace>
-    <AssemblyName>Bioinformatics</AssemblyName>
+    <RootNamespace>Markov</RootNamespace>
+    <AssemblyName>Markov</AssemblyName>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x86' ">
     <DebugSymbols>true</DebugSymbols>
@@ -21,8 +21,7 @@
     <DebugSymbols>false</DebugSymbols>
     <Optimize>true</Optimize>
     <OutputPath>bin\Release</OutputPath>
-    <DefineConstants>
-    </DefineConstants>
+    <DefineConstants></DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <Externalconsole>true</Externalconsole>
     <GenerateTailCalls>true</GenerateTailCalls>
@@ -37,19 +36,14 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
-    <Compile Include="Utils.fs" />
-    <Compile Include="Core.fs" />
-    <Compile Include="Distance.fs" />
-    <Compile Include="Clustering.fs" />
-    <Compile Include="Alignment.fs" />
-    <Compile Include="CFG.fs" />
+    <Compile Include="DPUtils.fs" />
+    <Compile Include="Types.fs" />
+    <Compile Include="Examples.fs" />
+    <Compile Include="Observe.fs" />
+    <Compile Include="Viterbi.fs" />
+    <Compile Include="Forward.fs" />
+    <Compile Include="Backward.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\..\Microsoft SDKs\F#\3.1\Framework\v4.0\Microsoft.FSharp.Targets" />
-  <ItemGroup>
-    <ProjectReference Include="..\Markov\Markov.fsproj">
-      <Project>{928A0DA2-6FE4-4D17-9A1F-DD42502BCD62}</Project>
-      <Name>Markov</Name>
-    </ProjectReference>
-  </ItemGroup>
 </Project>
