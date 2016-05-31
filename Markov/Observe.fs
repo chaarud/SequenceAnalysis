@@ -2,13 +2,7 @@
 
 open Types
 
-(*
-
-
-Generate observations
-
-
-*)
+// Generate observations
 let tryFindWhileFolding (predicate : 'State -> bool) (folder : 'State -> 'T -> 'State) initialState (xs : 'T list) : 'T option = 
     let rec loop innerState xs = 
         match xs with

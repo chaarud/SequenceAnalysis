@@ -2,13 +2,7 @@
 
 open Types
 
-(*
-
-
-Example: The occasionally dishonest casino
-
-
-*)
+// Example: The occasionally dishonest casino
 type Dice = Fair | Unfair
 
 type DiceRoll = One | Two | Three | Four | Five | Six

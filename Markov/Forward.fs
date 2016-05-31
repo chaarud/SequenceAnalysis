@@ -3,20 +3,11 @@
 open Types
 open DPUtils
 
-(*
-
-
-The Forward Algorithm
-
-
-*)
-// It's unclear if the forwards algorithm is correct, especially wrt termination
-// clean up representation - shouldn't use ViterbiCells, etc
 let sumForwards (hmm: HMM<_,_>) startState prevColumn currState = 
     prevColumn
-    |> Array.sumBy (fun pCell ->
+    |> Array.sumBy (fun prevCell ->
         let pTransition = 
-            match pCell.state with
+            match prevCell.state with
             | Some pState ->
                 Map.find pState hmm
                 |> fun i -> i.transitions
@@ -27,7 +18,7 @@ let sumForwards (hmm: HMM<_,_>) startState prevColumn currState =
                 startState
                 |> List.find (fst >> ((=) (Some currState)))
                 |> snd
-        pCell.score * pTransition)
+        prevCell.score * pTransition)
 
 let updatedForwardCell hmm startState table currState currEmission i l = 
     let prevColumn = getColumnFromTable (l-1) table 
@@ -37,11 +28,7 @@ let updatedForwardCell hmm startState table currState currEmission i l =
         |> List.find (fst >> ((=) currEmission))
         |> snd
     let forwardSum = sumForwards hmm startState prevColumn currState
-    {
-        table.[i,l] with
-            score = pEmission * forwardSum
-            ancestor = None //Ancestors are junk for forwards table filling
-    }
+    {table.[i,l] with score = pEmission * forwardSum}
 
 let rec fillForwardTable startState hmm coord (table : MarkovDPCell<_,_> [,]) =
     match coord with
@@ -71,19 +58,17 @@ let terminateForward startState hmm table =
     table
     |> getLastColumn
     |> Array.sumBy (fun cell -> 
-        let state = cell.state
         let pEnd =
-            match state with
+            match cell.state with
             | Some lastState ->
-                let lastStateInfo = Map.find (lastState) hmm
-                snd <| List.find (fst >> Option.isNone) lastStateInfo.transitions
+                Map.find (lastState) hmm
+                |> fun info -> info.transitions
+                |> List.find (fst >> Option.isNone)
+                |> snd
             | None ->
-                //this means the start state
-                //should be 0 probability of being in the forward state unless the observations list is empty, 
-                //but we should account for this
-                //it might be that we want to force the nonzero length observations,
-                //so the start state does not have a None transition probability...
-                //in this case return 0.
+                // This represents the case where there are no observations.
+                // The start state transitions directly to the end state.
+                // Attempt to find the probability, otherwise return 0.
                 List.tryFind (fst >> Option.isNone) startState
                 |> function
                     | Some (None, pBeginToEnd) -> pBeginToEnd

@@ -6,13 +6,7 @@ open Forward
 open Backward
 open Examples
 
-(*
-
-
-Do something
-
-
-*)
+// Run through an example
 let decodeOnce () = 
     let steps = 10
     let observation = observe exampleHmm exampleStartState steps

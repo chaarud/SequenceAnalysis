@@ -3,13 +3,6 @@
 open Types
 open DPUtils
 
-(*
-
-
-The Viterbi Algorithm
-
-
-*)
 let pGetToHiddenState hmm startState currState prevCell = 
     match prevCell.state with
     | Some prevState ->
@@ -59,12 +52,6 @@ let rec fillViterbiTable startState hmm coord (table : MarkovDPCell<_,_> [,]) =
             table.[i,l] <- updatedCell hmm startState table currState currEmission i l
         | _, _ -> 
             printf "Something went very wrong"
-    //TODO: refactor to account for end state transitions...
-    //add a case where it's the last column
-    //something like
-    //| (i, l) when i = (Array2D.length1 table) ->
-//        updatedFinalColumnCell hmm startState table currState currEmission i l
-            
     getNextCell (Array2D.length1 table) (Array2D.length2 table) coord
     |> function
         | Some newCoord ->
@@ -72,21 +59,47 @@ let rec fillViterbiTable startState hmm coord (table : MarkovDPCell<_,_> [,]) =
         | None ->
             table
 
-let viterbiTraceback table = 
-    let lastColumn = getLastColumn table
-    let maxCell = Array.maxBy (fun cell -> cell.score) lastColumn
+let foo startState hmm cell = 
+    let pEnd =
+        match cell.state with
+        | Some lastState ->
+            Map.find (lastState) hmm
+            |> fun info -> info.transitions
+            |> List.find (fst >> Option.isNone)
+            |> snd
+        | None ->
+            // This represents the case where there are no observations.
+            // The start state transitions directly to the end state.
+            // Attempt to find the probability, otherwise return 0.
+            List.tryFind (fst >> Option.isNone) startState
+            |> function
+                | Some (None, pBeginToEnd) -> pBeginToEnd
+                | _ -> 0.
+    cell.score * pEnd
+
+let viterbiTraceback startState hmm table = 
+    let maxCell = 
+        table
+        |> getLastColumn
+        |> Array.maxBy (foo startState hmm)
+
+    // should always be less than the forward probability
+    let viterbiProbability = foo startState hmm maxCell
 
     let rec loop acc cell = 
         match cell.ancestor with
         | Some ancestor -> loop (cell :: acc) ancestor
         | None -> (cell :: acc)
 
-    loop [] maxCell
+    let viterbiPath = loop [] maxCell
+
+    viterbiProbability, viterbiPath
 
 // we are currently ignoring transition probabilities to a special end state...
 let viterbi (startState : Begin<'State>) (hmm : HMM<'State, 'Emission>) (observations : 'Emission list) = 
     let states : 'State list = hmm |> Map.toList |> List.map fst
     makeDPTable states observations 
     |> fillViterbiTable startState hmm (0, 0) 
-    |> viterbiTraceback
+    |> viterbiTraceback startState hmm
+    |> snd
     |> List.choose (fun cell -> cell.state)
