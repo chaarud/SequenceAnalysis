@@ -3,6 +3,12 @@
 open Types
 open DPUtils
 
+type ForwardResult<'State, 'Emission> = 
+    {
+        probability : Probability
+        table : MarkovDPCell<'State, 'Emission> [,]
+    }
+
 let sumForwards (hmm: HMM<_,_>) startState prevColumn currState = 
     prevColumn
     |> Array.sumBy (fun prevCell ->
@@ -74,9 +80,13 @@ let terminateForward startState hmm table =
         cell.score * pEnd)
 
 let forward (startState : Begin<'State>) (hmm : HMM<'State, 'Emission>) (observations : 'Emission list) = 
-    hmm 
-    |> Map.toList 
-    |> List.map fst
-    |> makeDPTable observations
-    |> fillForwardTable startState hmm (0, 0)
-    |> terminateForward startState hmm
+    let table = 
+        hmm 
+        |> Map.toList 
+        |> List.map fst
+        |> makeDPTable observations
+    let prob = 
+        table
+        |> fillForwardTable startState hmm (0, 0)
+        |> terminateForward startState hmm
+    {probability = prob; table = table}

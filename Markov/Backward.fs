@@ -3,6 +3,12 @@
 open Types
 open DPUtils
 
+type BackwardResult<'State, 'Emission> = 
+    {
+        probability : Probability
+        table : MarkovDPCell<'State, 'Emission> [,] 
+    }
+
 let pEndTransition transitions = 
     transitions
     |> List.tryFind (fst >> ((=) None))
@@ -85,6 +91,8 @@ let backward (startState : Begin<'State>) (hmm : HMM<'State, 'Emission>) (observ
         |> List.map fst
         |> makeDPTable observations
     let startCoord = ((numRows table) - 1, (numColumns table) - 1)
-    table
-    |> fillBackwardTable startState hmm startCoord
-    |> terminateBackward startState hmm
+    let prob = 
+        table
+        |> fillBackwardTable startState hmm startCoord
+        |> terminateBackward startState hmm
+    {probability = prob; table = table}

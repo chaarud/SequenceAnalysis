@@ -12,14 +12,14 @@ let decodeOnce () =
     let observation = observe exampleHmm exampleStartState steps
     printfn "walking for %i steps: %A" steps observation
 
-    let viterbiDecoding = viterbi exampleStartState exampleHmm observation
-    printfn "viterbi decoding of the observation: %A" viterbiDecoding
+    let viterbiResult = viterbi exampleStartState exampleHmm observation
+    printfn "viterbi decoding of the observation: %A" viterbiResult.path
 
-    let forwardProbability = forward exampleStartState exampleHmm observation
-    printfn "forward probability of the observation: %A" forwardProbability
+    let forwardResult = forward exampleStartState exampleHmm observation
+    printfn "forward probability of the observation: %A" forwardResult.probability
 
-    let backwardProbability = backward exampleStartState exampleHmm observation
-    printfn "backward probability of the observation: %A" backwardProbability
+    let backwardResult = backward exampleStartState exampleHmm observation
+    printfn "backward probability of the observation: %A" backwardResult.probability
 
     printfn "\n"
 

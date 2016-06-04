@@ -3,6 +3,12 @@
 open Types
 open DPUtils
 
+type ViterbiResult<'State> = 
+    {
+        probability : Probability
+        path : 'State list
+    }
+
 let pGetToHiddenState hmm startState currState prevCell = 
     match prevCell.state with
     | Some prevState ->
@@ -95,11 +101,12 @@ let viterbiTraceback startState hmm table =
 
 // we are currently ignoring transition probabilities to a special end state...
 let viterbi (startState : Begin<'State>) (hmm : HMM<'State, 'Emission>) (observations : 'Emission list) = 
-    hmm 
-    |> Map.toList 
-    |> List.map fst
-    |> makeDPTable observations 
-    |> fillViterbiTable startState hmm (0, 0) 
-    |> viterbiTraceback startState hmm
-    |> snd
-    |> List.choose (fun cell -> cell.state)
+    let prob, cellPath = 
+        hmm 
+        |> Map.toList 
+        |> List.map fst
+        |> makeDPTable observations 
+        |> fillViterbiTable startState hmm (0, 0) 
+        |> viterbiTraceback startState hmm
+    let path = cellPath |> List.choose (fun cell -> cell.state)
+    {probability = prob; path = path}
