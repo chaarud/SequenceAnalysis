@@ -52,7 +52,7 @@ let rec fillViterbiTable startState hmm coord (table : MarkovDPCell<_,_> [,]) =
             table.[i,l] <- updatedCell hmm startState table currState currEmission i l
         | _, _ -> 
             printf "Something went very wrong"
-    getNextCell (Array2D.length1 table) (Array2D.length2 table) coord
+    getNextCell (numRows table) (numColumns table) coord
     |> function
         | Some newCoord ->
             fillViterbiTable startState hmm newCoord table
@@ -97,8 +97,10 @@ let viterbiTraceback startState hmm table =
 
 // we are currently ignoring transition probabilities to a special end state...
 let viterbi (startState : Begin<'State>) (hmm : HMM<'State, 'Emission>) (observations : 'Emission list) = 
-    let states : 'State list = hmm |> Map.toList |> List.map fst
-    makeDPTable states observations 
+    hmm 
+    |> Map.toList 
+    |> List.map fst
+    |> makeDPTable observations 
     |> fillViterbiTable startState hmm (0, 0) 
     |> viterbiTraceback startState hmm
     |> snd

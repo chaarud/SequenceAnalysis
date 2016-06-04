@@ -46,7 +46,7 @@ let rec fillForwardTable startState hmm coord (table : MarkovDPCell<_,_> [,]) =
             table.[i,l] <- updatedForwardCell hmm startState table currState currEmission i l
         | _, _ -> 
             printf "Something went very wrong"
-    getNextCell (Array2D.length1 table) (Array2D.length2 table) coord
+    getNextCell (numRows table) (numColumns table) coord
     |> function
         | Some newCoord ->
             fillForwardTable startState hmm newCoord table
@@ -76,7 +76,9 @@ let terminateForward startState hmm table =
         cell.score * pEnd)
 
 let forward (startState : Begin<'State>) (hmm : HMM<'State, 'Emission>) (observations : 'Emission list) = 
-    let states : 'State list = hmm |> Map.toList |> List.map fst
-    makeDPTable states observations
+    hmm 
+    |> Map.toList 
+    |> List.map fst
+    |> makeDPTable observations
     |> fillForwardTable startState hmm (0, 0)
     |> terminateForward startState hmm
