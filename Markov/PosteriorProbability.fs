@@ -5,11 +5,7 @@ open Backward
 open DPUtils
 
 let findPosteriorProbabilityOfState (state: 'State) (index: int) startState hmm (observations: 'Emission list) =
-
     let forwardResult = forward startState hmm observations
-    //forward probability should equal backward probability
-    let prob = forwardResult.probability
-
     let forwardScore = 
         forwardResult.table
         |> getColumnFromTable index
@@ -24,6 +20,7 @@ let findPosteriorProbabilityOfState (state: 'State) (index: int) startState hmm 
         |> Array.find (fun cell -> cell.state = Some state)
         |> fun cell -> cell.score
 
-    forwardScore * backwardScore / prob
+    //forward probability should equal backward probability
+    forwardScore * backwardScore / forwardResult.probability
 
 //TODO posterior decoding of sequences
