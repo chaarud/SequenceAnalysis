@@ -57,5 +57,5 @@ let getNextBackwardCell m n (i, j) =
         then Some (i-1, j)
         else
             if j-1 >= 0
-                then Some (m, j-1)
+                then Some (m-1, j-1)
                 else None

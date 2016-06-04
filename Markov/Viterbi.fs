@@ -17,7 +17,7 @@ let pGetToHiddenState hmm startState currState prevCell =
         |> List.find (fst >> ((=) (Some currState)))
         |> snd
         //this should give 0, because prevCell.score should be 0
-        //can we just elmiminate this entirely, and get rid of the startState parameter here?
+        //TODO can we elmiminate this and get rid of the startState parameter here
         |> (*) prevCell.score 
 
 let updatedCell hmm startState table currState currEmission i l = 
@@ -41,17 +41,15 @@ let rec fillViterbiTable startState hmm coord (table : MarkovDPCell<_,_> [,]) =
     | (0, 0) ->
         table.[0,0] <- {table.[0,0] with score = 1.}
     | (0, k) ->
-        // do we need an ancestor pointer here?
         table.[0,k] <- {table.[0,k] with score = 0.} 
     | (x, 0) ->
-        // there's no way we are in the begin state if it's not the first column, right?
         table.[x,0] <- {table.[x,0] with score = 0.}
     | (i, l) ->
         match table.[i,l].state, table.[i,l].emission with
         | Some currState, Some currEmission ->
             table.[i,l] <- updatedCell hmm startState table currState currEmission i l
         | _, _ -> 
-            printf "Something went very wrong"
+            printfn "Something went very wrong"
     getNextCell (numRows table) (numColumns table) coord
     |> function
         | Some newCoord ->

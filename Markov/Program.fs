@@ -18,6 +18,9 @@ let decodeOnce () =
     let forwardProbability = forward exampleStartState exampleHmm observation
     printfn "forward probability of the observation: %A" forwardProbability
 
+    let backwardProbability = backward exampleStartState exampleHmm observation
+    printfn "backward probability of the observation: %A" backwardProbability
+
     printfn "\n"
 
 let doSomething () = 
