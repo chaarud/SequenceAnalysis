@@ -77,12 +77,29 @@ let rec fillBackwardTable startState hmm coord table =
 //TODO
 let terminateBackward startState hmm table = 
     table
-    |> getColumnFromTable 0
+    //We want the column with index 1 (the 2nd column) because the first column of the table is filled with nothing/garbage.
+    |> getColumnFromTable 1
     |> Array.sumBy (fun cell ->
-        let pStartToThisState = 0.
-        let pEmission = 0.
-        let nextBackwardScore = 0.
-        pStartToThisState * pEmission * nextBackwardScore)
+
+        let pStartToThisState = 
+            startState
+            |> List.tryFind (fst >> ((=) cell.state))
+            |> function
+                | Some (stateOpt, prob) -> prob
+                | None -> 0.
+
+        //all cells in the first column should have Some emission. 
+        let pEmission = 
+            match cell.state, cell.emission with
+            | Some state, Some emission ->
+                Map.find state hmm
+                |> fun i -> i.emissions
+                |> List.find (fst >> ((=) emission))
+                |> snd
+            | _, _ -> 0.
+
+        let firstBackwardScore = cell.score
+        pStartToThisState * pEmission * firstBackwardScore)
 
 let backward (startState : Begin<'State>) (hmm : HMM<'State, 'Emission>) (observations : 'Emission list) = 
     let table = 

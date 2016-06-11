@@ -63,7 +63,7 @@ let rec fillViterbiTable startState hmm coord (table : MarkovDPCell<_,_> [,]) =
         | None ->
             table
 
-let foo startState hmm cell = 
+let findMostLikelyCell startState hmm cell = 
     let pEnd =
         match cell.state with
         | Some lastState ->
@@ -85,10 +85,10 @@ let viterbiTraceback startState hmm table =
     let maxCell = 
         table
         |> getLastColumn
-        |> Array.maxBy (foo startState hmm)
+        |> Array.maxBy (findMostLikelyCell startState hmm)
 
     // should always be less than the forward probability
-    let viterbiProbability = foo startState hmm maxCell
+    let viterbiProbability = findMostLikelyCell startState hmm maxCell
 
     let rec loop acc cell = 
         match cell.ancestor with
