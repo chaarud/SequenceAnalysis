@@ -7,7 +7,7 @@ open DPUtils
 let posteriorProbability prob fwdScore bwdScore = 
     fwdScore * bwdScore / prob
 
-let findPosteriorProbabilityOfState (state: 'State) (index: int) startState hmm (observations: 'Emission list) =
+let findPosteriorProbabilityOfState state index startState hmm observations =
     let forwardResult = forward startState hmm observations
     let forwardScore = 
         forwardResult.table
@@ -50,5 +50,6 @@ let posteriorDecoding startState hmm observations =
             |> fst
         posteriorCell :: acc) []
     |> List.choose (fun cell -> cell.state)
+    |> List.rev
 
 // TODO result of the posterior probability applied with a function G(i|x)

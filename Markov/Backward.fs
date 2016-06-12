@@ -78,6 +78,7 @@ let rec fillBackwardTable startState hmm coord table =
 let terminateBackward startState hmm table = 
     table
     //We want the column with index 1 (the 2nd column) because the first column of the table is filled with nothing/garbage.
+    //TODO what if there is no column 1? Ie, there are no observations, because we directly transition from the start state to the end state?
     |> getColumnFromTable 1
     |> Array.sumBy (fun cell ->
 

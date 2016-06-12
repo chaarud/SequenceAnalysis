@@ -54,7 +54,7 @@ let observe hmm startState n =
             getNextStateInfo hmm transitions
             |> function
                 | Some nextStateInfo -> loop (emission :: acc) nextStateInfo (i-1) 
-                | None -> List.rev acc
+                | None -> List.rev (emission :: acc)
 
     getNextStateInfo hmm startState
     |> Option.fold (fun acc firstState -> loop acc firstState n) []
