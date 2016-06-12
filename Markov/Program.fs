@@ -5,6 +5,7 @@ open Viterbi
 open Forward
 open Backward
 open Examples
+open PosteriorProbability
 
 // Run through an example
 let decodeOnce () = 
@@ -13,14 +14,19 @@ let decodeOnce () =
     printfn "walking for %i steps: %A" steps observation
 
     let viterbiResult = viterbi exampleStartState exampleHmm observation
-    printfn "viterbi decoding of the observation: %A" viterbiResult.path
-    printfn "viterbi probability of the observation    : %A" viterbiResult.probability
+    printfn "viterbi decoding of the observation     : %A" viterbiResult.path
+
+    let posteriorDecoding = posteriorDecoding exampleStartState exampleHmm observation
+    printfn "posterior decoding of the observation   : %A" posteriorDecoding
+
+    printfn "viterbi probability    : %A" viterbiResult.probability
 
     let forwardResult = forward exampleStartState exampleHmm observation
-    printfn "forward probability of the observation    : %A" forwardResult.probability
+    printfn "forward probability    : %A" forwardResult.probability
 
     let backwardResult = backward exampleStartState exampleHmm observation
-    printfn "backward probability of the observation   : %A" backwardResult.probability
+    printfn "backward probability   : %A" backwardResult.probability
+
 
     printfn "\n"
 

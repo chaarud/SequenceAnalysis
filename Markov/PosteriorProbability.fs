@@ -42,13 +42,13 @@ let posteriorDecoding startState hmm observations =
         let fwdCol = getColumnFromTable i fwdTable
         let bwdCol = getColumnFromTable i bwdTable
         let combinedColumn = Array.zip fwdCol bwdCol
-        let posteriorState = 
+        let posteriorCell = 
             combinedColumn
             |> Array.maxBy (fun (fwdCell, bwdCell) ->
                 //forward cell state should equal backward cell state
                 posterior fwdCell.score bwdCell.score)
             |> fst
-            |> fun cell -> cell.state
-        posteriorState :: acc) []
+        posteriorCell :: acc) []
+    |> List.choose (fun cell -> cell.state)
 
 // TODO result of the posterior probability applied with a function G(i|x)
