@@ -16,16 +16,16 @@ let pEndTransition transitions =
         | Some (_endState, pEnd) -> pEnd
         | None -> 0.
 
-let pEnd startState hmm = function
+let pEnd hmm = function
     | Some state ->
-        Map.find state hmm
+        Map.find state hmm.internalState
         |> fun i -> i.transitions
         |> pEndTransition
     | None ->
-        startState
+        hmm.startState
         |> pEndTransition
 
-let sumBackwards hmm startState nextColumn currState = 
+let sumBackwards hmm nextColumn currState = 
     nextColumn
     |> Array.sumBy (fun nextCell ->
         match nextCell.state, nextCell.emission with
@@ -33,7 +33,7 @@ let sumBackwards hmm startState nextColumn currState =
             let pTransitionToNextCell = 
                 match currState with
                 | Some currState ->
-                    Map.find currState hmm
+                    Map.find currState hmm.internalState
                     |> fun i -> i.transitions
                     |> List.find (fst >> ((=) (Some nextState)))
                     |> snd
@@ -41,7 +41,7 @@ let sumBackwards hmm startState nextColumn currState =
                     //TODO handle this case
                     0.
             let pEmission = 
-                Map.find nextState hmm
+                Map.find nextState hmm.internalState
                 |> fun i -> i.emissions
                 |> List.find (fst >> ((=) nextEmission))
                 |> snd
@@ -52,30 +52,30 @@ let sumBackwards hmm startState nextColumn currState =
             //should this ever be matched?
             0.)
 
-let updatedBackwardCell hmm startState table currState i l = 
+let updatedBackwardCell hmm table currState i l = 
     let nextColumn = getColumnFromTable (l+1) table
-    let backwardSum = sumBackwards hmm startState nextColumn currState
+    let backwardSum = sumBackwards hmm nextColumn currState
     {table.[i,l] with score = backwardSum}
 
-let rec fillBackwardTable startState hmm coord table = 
+let rec fillBackwardTable hmm coord table = 
     match coord with
     | (foo, k) when k = (numColumns table) - 1 -> 
-        let pEnd = pEnd startState hmm table.[foo,k].state
+        let pEnd = pEnd hmm table.[foo,k].state
         table.[foo,k] <- {table.[foo,k] with score = pEnd}
     | (x, 0) ->
         // Is this necessary?
         table.[x,0] <- {table.[x,0] with score = 0.}
     | (i, l) -> 
-        table.[i,l] <- updatedBackwardCell hmm startState table table.[i,l].state i l
+        table.[i,l] <- updatedBackwardCell hmm table table.[i,l].state i l
     getNextBackwardCell (numRows table) (numColumns table) coord
     |> function
         | Some newCoord ->
-            fillBackwardTable startState hmm newCoord table
+            fillBackwardTable hmm newCoord table
         | None ->
             table
 
 //TODO
-let terminateBackward startState hmm table = 
+let terminateBackward hmm table = 
     table
     //We want the column with index 1 (the 2nd column) because the first column of the table is filled with nothing/garbage.
     //TODO what if there is no column 1? Ie, there are no observations, because we directly transition from the start state to the end state?
@@ -83,7 +83,7 @@ let terminateBackward startState hmm table =
     |> Array.sumBy (fun cell ->
 
         let pStartToThisState = 
-            startState
+            hmm.startState
             |> List.tryFind (fst >> ((=) cell.state))
             |> function
                 | Some (stateOpt, prob) -> prob
@@ -93,7 +93,7 @@ let terminateBackward startState hmm table =
         let pEmission = 
             match cell.state, cell.emission with
             | Some state, Some emission ->
-                Map.find state hmm
+                Map.find state hmm.internalState
                 |> fun i -> i.emissions
                 |> List.find (fst >> ((=) emission))
                 |> snd
@@ -102,15 +102,15 @@ let terminateBackward startState hmm table =
         let firstBackwardScore = cell.score
         pStartToThisState * pEmission * firstBackwardScore)
 
-let backward (startState : Begin<'State>) (hmm : HMM<'State, 'Emission>) (observations : 'Emission list) = 
+let backward (hmm : HMM<'State, 'Emission>) (observations : 'Emission list) = 
     let table = 
-        hmm 
+        hmm.internalState
         |> Map.toList 
         |> List.map fst
         |> makeDPTable observations
     let startCoord = ((numRows table) - 1, (numColumns table) - 1)
     let prob = 
         table
-        |> fillBackwardTable startState hmm startCoord
-        |> terminateBackward startState hmm
+        |> fillBackwardTable hmm startCoord
+        |> terminateBackward hmm
     {probability = prob; table = table}

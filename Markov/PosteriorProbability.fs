@@ -8,7 +8,7 @@ let posteriorProbability prob fwdScore bwdScore =
     fwdScore * bwdScore / prob
 
 let findPosteriorProbabilityOfState state index startState hmm observations =
-    let forwardResult = forward startState hmm observations
+    let forwardResult = forward hmm observations
     let forwardScore = 
         forwardResult.table
         |> getColumnFromTable index
@@ -17,7 +17,7 @@ let findPosteriorProbabilityOfState state index startState hmm observations =
 
     let backwardScore = 
         observations
-        |> backward startState hmm
+        |> backward hmm
         |> fun backwardResult -> backwardResult.table
         |> getColumnFromTable index
         |> Array.find (fun cell -> cell.state = Some state)
@@ -27,9 +27,9 @@ let findPosteriorProbabilityOfState state index startState hmm observations =
     posteriorProbability forwardResult.probability forwardScore backwardScore 
 
 let posteriorDecoding startState hmm observations = 
-    let fwdResult = forward startState hmm observations
+    let fwdResult = forward hmm observations
     let fwdTable = fwdResult.table
-    let bwdResult = backward startState hmm observations
+    let bwdResult = backward hmm observations
     let bwdTable = bwdResult.table
 
     let prob = fwdResult.probability

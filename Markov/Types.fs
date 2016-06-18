@@ -19,8 +19,14 @@ type NodeInfo<'State, 'Emission> =
         transitions : (('State option) * Probability) list
     }
 
-// each element in 'state should appear at most once
-type HMM<'State, 'Emission when 'State : comparison> = Map<'State, NodeInfo<'State, 'Emission>>
+type InternalState<'State, 'Emission when 'State : comparison> = Map<'State, NodeInfo<'State, 'Emission>>
 
 //'State option because the observations could be empty (ie start -> end) I suppose.
-type Begin<'State> = (('State option) * Probability) list
+type StartState<'State> = (('State option) * Probability) list
+
+type HMM<'State, 'Emission when 'State : comparison> = 
+    {
+        internalState: InternalState<'State, 'Emission>
+        startState: StartState<'State>
+    }
+

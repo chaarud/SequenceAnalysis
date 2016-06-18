@@ -19,7 +19,7 @@ let fairEmissionDistribution =
 let unfairEmissionDistribution = 
     [(One, 0.1); (Two, 0.1); (Three, 0.1); (Four, 0.1); (Five, 0.1); (Six, 0.5)]
 
-let exampleStartState : Begin<Dice> = [(Some Unfair, 0.2); (Some Fair, 0.8)]
+let exampleStartState : StartState<Dice> = [(Some Unfair, 0.2); (Some Fair, 0.8)]
 
 let fairInfo = 
     {
@@ -33,4 +33,6 @@ let unfairInfo =
         emissions = unfairEmissionDistribution
     }
 
-let exampleHmm = [(Fair, fairInfo); (Unfair, unfairInfo)] |> Map.ofList
+let exampleInternalState = [(Fair, fairInfo); (Unfair, unfairInfo)] |> Map.ofList
+
+let exampleHmm = {startState = exampleStartState; internalState = exampleInternalState}

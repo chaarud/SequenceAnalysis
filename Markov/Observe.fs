@@ -45,16 +45,16 @@ let getNextStateInfo hmm transitions =
         Map.find nextState hmm 
         |> fun info -> info.emissions, info.transitions)
 
-let observe hmm startState n = 
+let observe hmm n = 
     let rec loop acc (emissions, transitions) = function
         | i when i <= 0 ->
             List.rev acc
         | i ->
             let emission = getEmission emissions
-            getNextStateInfo hmm transitions
+            getNextStateInfo hmm.internalState transitions
             |> function
                 | Some nextStateInfo -> loop (emission :: acc) nextStateInfo (i-1) 
                 | None -> List.rev (emission :: acc)
 
-    getNextStateInfo hmm startState
+    getNextStateInfo hmm.internalState hmm.startState
     |> Option.fold (fun acc firstState -> loop acc firstState n) []
