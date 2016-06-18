@@ -3,20 +3,43 @@
 open Types
 open DPUtils
 
+let logProb xs = 
+    List.map (fun (a, b) -> (a, log b)) xs
+
+let logHmm hmm = 
+    {
+        startState = logProb hmm.startState
+        internalState = 
+            hmm.internalState 
+            |> Map.map (fun _key nodeInfo ->
+                {
+                    emissions = logProb nodeInfo.emissions
+                    transitions = logProb nodeInfo.transitions
+                })
+    }
+
 type ViterbiComputationConfiguration<'S, 'E when 'S : comparison> = 
     {
-        scorer: Probability -> Probability -> Probability
+        topRightScore: Probability
+        zerothRowAndColumnScore: Probability
+        combinator: Probability -> Probability -> Probability
         modelTransformer: HMM<'S, 'E> -> HMM<'S, 'E>
     }
 
-//let logComputationConfiguration = 
-//    {
-//        scorer = (+)
-//    }
+//TODO fix this odd behavior: if I try to say double(-infinity) I run into issues
+let logComputationConfiguration = 
+    {
+        topRightScore = 0.
+        zerothRowAndColumnScore = System.Double.NegativeInfinity //double (-infinity)
+        combinator = (+)
+        modelTransformer = logHmm
+    }
 
 let normalComputationConfiguration = 
     {
-        scorer = (*)
+        topRightScore = 1.
+        zerothRowAndColumnScore = 0.
+        combinator = (*)
         modelTransformer = id
     }
 
@@ -26,7 +49,7 @@ type ViterbiResult<'State> =
         path : 'State list
     }
 
-let pGetToHiddenState model currState prevCell = 
+let pGetToHiddenState combinator model currState prevCell = 
     match prevCell.state with
     | Some prevState ->
         let prevInfo = Map.find prevState model.internalState
@@ -34,53 +57,53 @@ let pGetToHiddenState model currState prevCell =
             prevInfo.transitions
             |> List.find (fst >> ((=) (Some currState)))
             |> snd
-        pTransitionToThisState * prevCell.score
+        combinator prevCell.score pTransitionToThisState
     | None ->
         model.startState 
         |> List.find (fst >> ((=) (Some currState)))
         |> snd
         //this should give 0, because prevCell.score should be 0
-        //TODO can we elmiminate this and get rid of the startState parameter here
-        |> (*) prevCell.score 
+        //TODO can this be eliminated
+        |> combinator prevCell.score 
 
-let updatedCell model table currState currEmission i l (scorer: Probability -> Probability -> Probability) = 
+let updatedCell combinator model table currState currEmission i l = 
     let prevColumn = getColumnFromTable (l-1) table 
     let pEmission = 
         Map.find currState model.internalState
         |> fun i -> i.emissions
         |> List.find (fst >> ((=) currEmission))
         |> snd
-    let pGetToHiddenState = pGetToHiddenState model currState
+    let pGetToHiddenState = pGetToHiddenState combinator model currState
     let prevCell =
         prevColumn
         |> Array.maxBy pGetToHiddenState
     let pGetToCurrState = pGetToHiddenState prevCell
     {table.[i,l] with
-        score = scorer pEmission pGetToCurrState
+        score = combinator pEmission pGetToCurrState
         ancestor = Some prevCell}
 
-let rec fillViterbiTable model coord (table : MarkovDPCell<_,_> [,]) = 
+let rec fillViterbiTable config model coord (table : MarkovDPCell<_,_> [,]) = 
     match coord with
     | (0, 0) ->
-        table.[0,0] <- {table.[0,0] with score = 1.}
+        table.[0,0] <- {table.[0,0] with score = config.topRightScore}
     | (0, k) ->
-        table.[0,k] <- {table.[0,k] with score = 0.} 
+        table.[0,k] <- {table.[0,k] with score = config.zerothRowAndColumnScore} 
     | (x, 0) ->
-        table.[x,0] <- {table.[x,0] with score = 0.}
+        table.[x,0] <- {table.[x,0] with score = config.zerothRowAndColumnScore}
     | (i, l) ->
         match table.[i,l].state, table.[i,l].emission with
         | Some currState, Some currEmission ->
-            table.[i,l] <- updatedCell model table currState currEmission i l (*)
+            table.[i,l] <- updatedCell config.combinator model table currState currEmission i l
         | _, _ -> 
             printfn "Something went very wrong"
     getNextCell (numRows table) (numColumns table) coord
     |> function
         | Some newCoord ->
-            fillViterbiTable model newCoord table
+            fillViterbiTable config model newCoord table
         | None ->
             table
 
-let findMostLikelyCell model cell = 
+let findMostLikelyCell combinator model cell = 
     let pEnd =
         match cell.state with
         | Some lastState ->
@@ -96,16 +119,16 @@ let findMostLikelyCell model cell =
             |> function
                 | Some (None, pBeginToEnd) -> pBeginToEnd
                 | _ -> 0.
-    cell.score * pEnd
+    combinator cell.score pEnd
 
-let viterbiTraceback model table = 
+let viterbiTraceback combinator model table = 
     let maxCell = 
         table
         |> getLastColumn
-        |> Array.maxBy (findMostLikelyCell model)
+        |> Array.maxBy (findMostLikelyCell combinator model)
 
     // should always be less than the forward probability
-    let viterbiProbability = findMostLikelyCell model maxCell
+    let viterbiProbability = findMostLikelyCell combinator model maxCell
 
     let rec loop acc cell = 
         match cell.ancestor with
@@ -116,17 +139,25 @@ let viterbiTraceback model table =
 
     viterbiProbability, viterbiPath
 
-// we are currently ignoring transition probabilities to a special end state...
-let viterbi (model : HMM<'State, 'Emission>) (observations : 'Emission list) = 
-    //(startState : Begin<'State>) (hmm : HMM<'State, 'Emission>) (observations : 'Emission list) = 
-    let hmm = model.internalState
-    let startState = model.startState
-    let prob, cellPath = 
+let viterbi (config: ViterbiComputationConfiguration<'State, 'Emission>) (originalModel : HMM<'State, 'Emission>) (observations : 'Emission list) = 
+    let model = config.modelTransformer originalModel
+
+    //printfn "model with log probabilities: %A" model
+
+    let tbl = 
         model.internalState 
         |> Map.toList 
         |> List.map fst
         |> makeDPTable observations 
-        |> fillViterbiTable model (0, 0) 
-        |> viterbiTraceback model
+        |> fillViterbiTable config model (0, 0) 
+
+    //printfn "table: \n%A" <| Array2D.map (fun cell -> cell.score) tbl
+
+    let prob, cellPath = 
+        tbl
+        |> viterbiTraceback config.combinator model
+
+    //printfn "cell path: %A" cellPath
+
     let path = cellPath |> List.choose (fun cell -> cell.state)
     {probability = prob; path = path}

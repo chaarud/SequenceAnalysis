@@ -26,7 +26,7 @@ let findPosteriorProbabilityOfState state index startState hmm observations =
     //forward probability should equal backward probability
     posteriorProbability forwardResult.probability forwardScore backwardScore 
 
-let posteriorDecoding startState hmm observations = 
+let posteriorDecoding hmm observations = 
     let fwdResult = forward hmm observations
     let fwdTable = fwdResult.table
     let bwdResult = backward hmm observations

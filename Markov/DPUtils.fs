@@ -14,7 +14,7 @@ let makeDPTable (observations : 'Emission list) (states : 'State list) =
     |> Array2D.mapi (fun idxState idxEmission cell ->
         {
             // TODO: should the score be an option as well?
-            score = -1.0
+            score = -infinity //-1.0 //HACK
             ancestor = None
             state = if idxState = 0 then None else Some states.[idxState - 1]
             emission = if idxEmission = 0 then None else Some observations.[idxEmission - 1]
